@@ -768,6 +768,100 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         return words.map { TimedWord(text: $0.text, start: $0.start / 1000, end: $0.end / 1000) }
     }
 
+    func retranscribeNote(id: UUID, completion: ((Bool) -> Void)? = nil) {
+        guard let audioURL = audioFileURL(for: id),
+              FileManager.default.fileExists(atPath: audioURL.path) else {
+            completion?(false)
+            return
+        }
+
+        DispatchQueue.main.async {
+            self.warningMessage = nil
+            self.isProcessingFile = true
+            self.fileProcessingProgress = 0.0
+            self.transcribedText = String(localized: "Повторное распознавание...")
+            OverlayPanelManager.shared.showOverlay()
+        }
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self else { return }
+            let processStartTime = Date()
+
+            guard let inputFile = try? AVAudioFile(forReading: audioURL) else {
+                DispatchQueue.main.async {
+                    OverlayPanelManager.shared.showWarning(message: String(localized: "Ошибка чтения файла"))
+                    self.isProcessingFile = false
+                    completion?(false)
+                }
+                return
+            }
+
+            let totalFrames = inputFile.length
+            let sampleRate = inputFile.processingFormat.sampleRate
+            let realAudioSecs = Double(totalFrames) / sampleRate
+
+            let chunkSizeInSeconds: Double = 25.0
+            let framesPerChunk = AVAudioFrameCount(chunkSizeInSeconds * sampleRate)
+            let totalChunks = max(1, Int(ceil(Double(totalFrames) / Double(framesPerChunk))))
+
+            var accumulatedText: [String] = []
+            var accumulatedWords: [TimedWord] = []
+            let targetFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16000, channels: 1, interleaved: false)!
+
+            for chunkIndex in 0..<totalChunks {
+                autoreleasepool {
+                    let startFrame = Int64(chunkIndex) * Int64(framesPerChunk)
+                    let frameCountToRead = min(framesPerChunk, AVAudioFrameCount(totalFrames - startFrame))
+
+                    inputFile.framePosition = startFrame
+                    guard let pcmBuffer = AVAudioPCMBuffer(pcmFormat: inputFile.processingFormat, frameCapacity: frameCountToRead) else { return }
+                    try? inputFile.read(into: pcmBuffer, frameCount: frameCountToRead)
+
+                    let chunkWavURL = FileManager.default.temporaryDirectory.appendingPathComponent("retranscribe_chunk_\(chunkIndex).wav")
+                    if self.writeBufferToWav(buffer: pcmBuffer, targetFormat: targetFormat, outputURL: chunkWavURL) {
+                        let chunkResult = self.runCLIOnWav(wavURL: chunkWavURL)
+                        let chunkText = chunkResult.text
+                        if !chunkText.isEmpty && chunkText != String(localized: "Речь не распознана") {
+                            accumulatedText.append(chunkText)
+                        }
+                        let chunkStart = Double(chunkIndex) * chunkSizeInSeconds
+                        for word in chunkResult.words {
+                            accumulatedWords.append(TimedWord(text: word.text, start: word.start + chunkStart, end: word.end + chunkStart))
+                        }
+                        try? FileManager.default.removeItem(at: chunkWavURL)
+                    }
+
+                    DispatchQueue.main.async {
+                        self.fileProcessingProgress = Double(chunkIndex + 1) / Double(totalChunks)
+                        OverlayPanelManager.shared.keepFront()
+                    }
+                }
+            }
+
+            let rawText = accumulatedText.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+            let termsCorrectedText = TechTermStore.shared.applyReplacements(to: rawText)
+            let prettyFormattedText = TextFormatter.formatIntoParagraphs(termsCorrectedText)
+            let processingTimeSecs = Date().timeIntervalSince(processStartTime)
+            let calculatedSpeedup = max(1.0, realAudioSecs / max(0.1, processingTimeSecs))
+
+            DispatchQueue.main.async {
+                self.isProcessingFile = false
+                if prettyFormattedText.isEmpty {
+                    OverlayPanelManager.shared.showWarning(message: String(localized: "Речь не распознана"))
+                    completion?(false)
+                } else {
+                    self.replaceNoteText(id: id, text: prettyFormattedText)
+                    if !accumulatedWords.isEmpty {
+                        self.saveTimingsForNote(id: id, words: accumulatedWords, duration: realAudioSecs)
+                    }
+                    SoundEffect.playSuccess()
+                    OverlayPanelManager.shared.scheduleHide(after: 0.8)
+                    completion?(true)
+                }
+            }
+        }
+    }
+
     private func preloadAudio(for id: UUID) {
         guard preloadedPlayerId != id else { return }
         preloadedPlayerId = id
@@ -877,6 +971,13 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
     private func runCLIOnWav(wavURL: URL) -> (text: String, words: [TimedWord]) {
         let store = ModelStore.shared
         guard let model = store.model(named: store.activeModelID) else { return ("", []) }
+
+        // 1. Кастомный удаленный инференс (OpenAI-совместимый API / llama-swap)
+        if model.inferenceType == .remoteOpenAI, let endpoint = model.endpointURL, let url = URL(string: endpoint) {
+            return runRemoteOpenAITranscription(wavURL: wavURL, endpoint: url, model: model)
+        }
+
+        // 2. Встроенная модель GigaAM через transcribe-cli
         if model.isBundled {
             guard let cliPath = Bundle.main.path(forResource: "transcribe-cli", ofType: nil),
                   let modelPath = Bundle.main.path(forResource: model.fileName, ofType: "gguf") else {
@@ -892,6 +993,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
             }
             return ("", words)
         } else {
+            // 3. Локальные Whisper модели через whisper-cli
             guard let cliPath = Bundle.main.path(forResource: "whisper-cli", ofType: nil),
                   let modelPath = store.localModelPath(for: model.id) else {
                 AppLogger.shared.error("Recognition", "whisper-cli или модель \(model.id) не найдены", details: model.id)
@@ -904,6 +1006,58 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
             let text = parts.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
             return (text, Self.finalizeWords(readWhisperWords(wavURL: wavURL)))
         }
+    }
+
+    private func runRemoteOpenAITranscription(wavURL: URL, endpoint: URL, model: RecognitionModel) -> (text: String, words: [TimedWord]) {
+        let semaphore = DispatchSemaphore(value: 0)
+        var resultText = ""
+        
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 120
+        if let key = model.apiKey, !key.isEmpty {
+            request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        }
+
+        let boundary = "Boundary-\(UUID().uuidString)"
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+
+        var body = Data()
+        // file
+        if let fileData = try? Data(contentsOf: wavURL) {
+            body.append("--\(boundary)\r\n".data(using: .utf8)!)
+            body.append("Content-Disposition: form-data; name=\"file\"; filename=\"audio.wav\"\r\n".data(using: .utf8)!)
+            body.append("Content-Type: audio/wav\r\n\r\n".data(using: .utf8)!)
+            body.append(fileData)
+            body.append("\r\n".data(using: .utf8)!)
+        }
+        // model
+        if let modelId = model.modelIdentifier, !modelId.isEmpty {
+            body.append("--\(boundary)\r\n".data(using: .utf8)!)
+            body.append("Content-Disposition: form-data; name=\"model\"\r\n\r\n".data(using: .utf8)!)
+            body.append("\(modelId)\r\n".data(using: .utf8)!)
+        }
+        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
+        request.httpBody = body
+
+        let task = URLSession.shared.dataTask(with: request) { data, response, error in
+            defer { semaphore.signal() }
+            if let error = error {
+                AppLogger.shared.error("Recognition", "Ошибка удаленного распознавания: \(error.localizedDescription)")
+                return
+            }
+            guard let data = data,
+                  let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
+                return
+            }
+            if let t = json["text"] as? String {
+                resultText = t.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+        task.resume()
+        _ = semaphore.wait(timeout: .now() + 120)
+
+        return (resultText, [])
     }
 
     private func parseGigaAMTokens(_ output: String) -> [TimedWord] {

@@ -832,6 +832,15 @@ struct ContentView: View {
                                         EditToggleButton(isEditing: isEditing) {
                                             if isEditing { commitEditing(for: selected) } else { beginEditing(selected) }
                                         }
+                                        if audioCapture.hasAudioFile(for: selected) {
+                                            UIOutlineButton(title: "Распознать заново") {
+                                                audioCapture.retranscribeNote(id: selected.id) { success in
+                                                    if success, let updated = audioCapture.history.first(where: { $0.id == selected.id }) {
+                                                        editableText = updated.text
+                                                    }
+                                                }
+                                            }
+                                        }
                                         UIDropdownMenu(items: {
                                             var arr: [UIDropdownItem] = promptStore.templates.map { t in
                                                 let isBuiltin = AIPromptDefaults.builtinIDs.contains(t.id)
