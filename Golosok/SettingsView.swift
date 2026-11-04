@@ -295,7 +295,7 @@ HStack {
                             Spacer()
                             Toggle("", isOn: $techTerms.isReplacementEnabled)
                                 .labelsHidden()
-                                .toggleStyle(CustomGreenToggleStyle())
+                                .toggleStyle(SwitchToggleStyle(tint: Color(hex: "#10B981")))
 
                             UIOutlineButton(title: "Словарь") {
                                 showingTechTermsSheet = true

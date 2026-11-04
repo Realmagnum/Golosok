@@ -64,7 +64,7 @@ struct TechTermManagerView: View {
                     set: { store.setAllEnabled($0) }
                 ))
                 .labelsHidden()
-                .toggleStyle(CustomGreenToggleStyle())
+                .toggleStyle(SwitchToggleStyle(tint: Color(hex: "#10B981")))
 
                 Text(allEnabled ? "Снять выделение со всех" : "Выбрать все")
                     .font(UIStyleFont.body(size: 12, weight: .medium))
@@ -167,7 +167,7 @@ struct TechTermManagerView: View {
                 set: { _ in store.toggle(id: rule.id) }
             ))
             .labelsHidden()
-            .toggleStyle(CustomGreenToggleStyle())
+            .toggleStyle(SwitchToggleStyle(tint: Color(hex: "#10B981")))
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(rule.canonical)
@@ -244,32 +244,6 @@ struct TechTermManagerView: View {
 
         if panel.runModal() == .OK, let url = panel.url {
             _ = store.exportToURL(url)
-        }
-    }
-}
-
-// MARK: - Кастомный стиль переключателя с сохранением сочного цвета при потере фокуса
-
-struct CustomGreenToggleStyle: ToggleStyle {
-    var activeColor = Color(hex: "#10B981")
-    var inactiveColor = Color(hex: "#3F3F46")
-
-    func makeBody(configuration: Configuration) -> some View {
-        HStack {
-            configuration.label
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(configuration.isOn ? activeColor : inactiveColor)
-                .frame(width: 38, height: 22)
-                .overlay(
-                    Circle()
-                        .fill(Color.white)
-                        .padding(2)
-                        .offset(x: configuration.isOn ? 8 : -8)
-                )
-                .animation(.easeInOut(duration: 0.16), value: configuration.isOn)
-                .onTapGesture {
-                    configuration.isOn.toggle()
-                }
         }
     }
 }
