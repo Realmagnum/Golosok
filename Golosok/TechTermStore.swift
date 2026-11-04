@@ -84,10 +84,86 @@ final class TechTermStore: ObservableObject {
         persist()
     }
 
+    func setAllEnabled(_ enabled: Bool) {
+        for i in 0..<rules.count {
+            rules[i].isEnabled = enabled
+        }
+        rebuildRegexCache()
+        persist()
+    }
+
     func resetToDefaults() {
         rules = Self.defaultRules
         rebuildRegexCache()
         persist()
+    }
+
+    // MARK: - Импорт и Экспорт словаря
+
+    @discardableResult
+    func importFromURL(_ url: URL, overwrite: Bool = false) -> (imported: Int, error: String?) {
+        guard let data = try? Data(contentsOf: url) else {
+            return (0, "Не удалось прочитать выбранный файл")
+        }
+
+        // Поддерживаем как полноценный JSON массив TechTermRule, так и упрощенный формат {"canonical": ["pattern1", "pattern2"]}
+        var incomingRules: [TechTermRule] = []
+
+        if let decoded = try? JSONDecoder().decode([TechTermRule].self, from: data) {
+            incomingRules = decoded
+        } else if let dict = try? JSONDecoder().decode([String: [String]].self, from: data) {
+            incomingRules = dict.map { TechTermRule(canonical: $0.key, patterns: $0.value, isEnabled: true) }
+        } else if let jsonObject = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] {
+            for item in jsonObject {
+                if let can = item["canonical"] as? String {
+                    let pats = (item["patterns"] as? [String]) ?? []
+                    let enabled = (item["isEnabled"] as? Bool) ?? true
+                    if !pats.isEmpty {
+                        incomingRules.append(TechTermRule(canonical: can, patterns: pats, isEnabled: enabled))
+                    }
+                }
+            }
+        }
+
+        guard !incomingRules.isEmpty else {
+            return (0, "Файл не содержит корректных записей словаря (поддерживается JSON)")
+        }
+
+        if overwrite {
+            rules = incomingRules
+        } else {
+            // Умное слияние: дополняем существующие канонические термины новыми паттернами, либо добавляем новые
+            for incoming in incomingRules {
+                let cleanCan = incoming.canonical.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !cleanCan.isEmpty else { continue }
+                if let existingIdx = rules.firstIndex(where: { $0.canonical.caseInsensitiveCompare(cleanCan) == .orderedSame }) {
+                    var existingPats = Set(rules[existingIdx].patterns.map { $0.lowercased() })
+                    for p in incoming.patterns {
+                        let trimmed = p.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if !trimmed.isEmpty && !existingPats.contains(trimmed.lowercased()) {
+                            rules[existingIdx].patterns.append(trimmed)
+                            existingPats.insert(trimmed.lowercased())
+                        }
+                    }
+                } else {
+                    rules.append(incoming)
+                }
+            }
+        }
+
+        rebuildRegexCache()
+        persist()
+        return (incomingRules.count, nil)
+    }
+
+    func exportToURL(_ url: URL) -> Bool {
+        guard let data = try? JSONEncoder().encode(rules) else { return false }
+        do {
+            try data.write(to: url, options: .atomic)
+            return true
+        } catch {
+            return false
+        }
     }
 
     // MARK: - Применение правил автозамены (0 мс задержки)
@@ -156,27 +232,28 @@ final class TechTermStore: ObservableObject {
     // MARK: - Базовый проверенный набор правил (по результатам анализа history.json)
 
     static let defaultRules: [TechTermRule] = [
-        .init(canonical: "Tailscale", patterns: ["stale skale", "talescale", "тейлскейл", "тайлскейл", "staleskale"]),
-        .init(canonical: "OpenCode", patterns: ["open-код", "опен-код", "опин-код", "open-code", "open coda", "open cod", "опенкод"]),
-        .init(canonical: "Hindsight", patterns: ["hinsite", "хинсайт", "хинсайд", "hinesid", "хайндсайт", "хайндсайд"]),
+        .init(canonical: "Tailscale", patterns: ["TL Skale", "stale skale", "talescale", "тейлскейл", "тайлскейл", "staleskale"]),
+        .init(canonical: "OpenCode", patterns: ["Open Code", "open-код", "опен-код", "опин-код", "open-code", "open coda", "open cod", "опенкод"]),
+        .init(canonical: "Hindsight", patterns: ["хин-сайт", "hinsite", "хинсайт", "хинсайд", "hinesid", "хайндсайт", "хайндсайд"]),
         .init(canonical: "Vaultwarden", patterns: ["vout warden", "woutwarden", "веб-ваут", "web-vault", "веб-вольт", "веб-вольта"]),
         .init(canonical: "Ollama", patterns: ["alama local", "alama", "оллама", "олламу"]),
         .init(canonical: "symlink", patterns: ["simlink", "симлинк", "симлинка"]),
-        .init(canonical: "upstream", patterns: ["абстрим", "абстрима", "абстриме", "ваб-стриме", "ваб-стрим"]),
-        .init(canonical: "Cloudflare", patterns: ["cloud flaer", "клаудфлер", "клауд флеер"]),
+        .init(canonical: "upstream", patterns: ["вабстрим", "абстрим", "абстрима", "абстриме", "ваб-стриме", "ваб-стрим"]),
+        .init(canonical: "Cloudflare", patterns: ["cloudfla", "cloud flaer", "клаудфлер", "клауд флеер"]),
         .init(canonical: "NetBox", patterns: ["netbox", "нетбокс"]),
         .init(canonical: "LLDP", patterns: ["лдп", "lldp"]),
         .init(canonical: "CDP", patterns: ["сдп", "cdp"]),
         .init(canonical: "SNMP", patterns: ["snm", "снмп", "snmp"]),
         .init(canonical: "VoIP", patterns: ["wip-устройств", "wip-устройства", "воип", "voip"]),
-        .init(canonical: "sidebar", patterns: ["site bare", "сайтбар", "сайтбаре"]),
+        .init(canonical: "sidebar", patterns: ["Side Bar", "site bare", "сайтбар", "сайтбаре"]),
+        .init(canonical: "gateway", patterns: ["Gate Way", "гейтвей", "гейтвейем", "шлюз"]),
         .init(canonical: "timeout", patterns: ["mout 80", "таймаут", "таймаута"]),
         .init(canonical: "digest", patterns: ["дальшест", "дайлжест", "дайджест"]),
         .init(canonical: "remote", patterns: ["remout", "ремоут"]),
-        .init(canonical: "Kubernetes", patterns: ["кубернетес", "кубернетис", "k8s"]),
-        .init(canonical: "Docker", patterns: ["докер", "докера", "докер-контейнер"]),
+        .init(canonical: "Kubernetes", patterns: ["cubernetis", "кубернетес", "кубернетис", "k8s"]),
+        .init(canonical: "Docker", patterns: ["Doker", "докер", "докера", "докер-контейнер"]),
         .init(canonical: "SSH", patterns: ["ссш", "ссх", "ssh-ключ", "sh-верь"]),
-        .init(canonical: "Nginx", patterns: ["нжинкс", "нгинкс", "энджинкс", "nginx"]),
+        .init(canonical: "Nginx", patterns: ["Enginx", "нжинкс", "нгинкс", "энджинкс", "nginx"]),
         .init(canonical: "GitHub", patterns: ["гитхаб", "гитхабе", "гитхабан", "github"]),
         .init(canonical: "macOS", patterns: ["макос", "мак ос", "macos"]),
         .init(canonical: "Linux", patterns: ["линукс", "линуксе", "linux"]),

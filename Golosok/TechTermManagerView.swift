@@ -1,4 +1,6 @@
 import SwiftUI
+import UniformTypeIdentifiers
+import AppKit
 
 // MARK: - Модальное окно управления словарем технических терминов
 
@@ -9,16 +11,28 @@ struct TechTermManagerView: View {
     @State private var editingRule: TechTermRule?
     @State private var creatingRule = false
     @State private var showingResetAlert = false
+    @State private var importResultMessage: String?
+    @State private var showingImportAlert = false
+
+    private var allEnabled: Bool {
+        !store.rules.isEmpty && store.rules.allSatisfy { $0.isEnabled }
+    }
+
+    private var noneEnabled: Bool {
+        store.rules.allSatisfy { !$0.isEnabled }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             header
             Divider().background(Color.uiHairline)
+            actionToolbar
+            Divider().background(Color.uiHairline)
             list
             Divider().background(Color.uiHairline)
             footer
         }
-        .frame(minWidth: 540, idealWidth: 580, minHeight: 460, idealHeight: 580)
+        .frame(minWidth: 560, idealWidth: 600, minHeight: 480, idealHeight: 600)
         .background(Color.uiPaper)
         .sheet(item: $editingRule) { rule in
             TechTermEditorView(rule: rule)
@@ -34,6 +48,68 @@ struct TechTermManagerView: View {
         } message: {
             Text("Все пользовательские термины будут заменены предустановленным набором IT-терминов.")
         }
+        .alert("Импорт словаря", isPresented: $showingImportAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(importResultMessage ?? "")
+        }
+    }
+
+    private var actionToolbar: some View {
+        HStack(spacing: 12) {
+            // Переключатель Выбрать все / Снять все
+            HStack(spacing: 8) {
+                Toggle("", isOn: Binding(
+                    get: { allEnabled },
+                    set: { store.setAllEnabled($0) }
+                ))
+                .labelsHidden()
+                .toggleStyle(CustomGreenToggleStyle())
+
+                Text(allEnabled ? "Снять выделение со всех" : "Выбрать все")
+                    .font(UIStyleFont.body(size: 12, weight: .medium))
+                    .foregroundColor(.uiInk)
+            }
+
+            Spacer()
+
+            // Кнопка Импорт
+            Button(action: importDictionary) {
+                HStack(spacing: 4) {
+                    Image(systemName: "square.and.arrow.down")
+                        .font(.system(size: 11, weight: .medium))
+                    Text("Импорт")
+                        .font(UIStyleFont.body(size: 12, weight: .medium))
+                }
+                .foregroundColor(.uiInk)
+                .padding(.vertical, 4)
+                .padding(.horizontal, 10)
+                .background(Color.uiSidebar)
+                .cornerRadius(8)
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.uiHairline, lineWidth: 1))
+            }
+            .buttonStyle(PlainButtonStyle())
+
+            // Кнопка Экспорт
+            Button(action: exportDictionary) {
+                HStack(spacing: 4) {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.system(size: 11, weight: .medium))
+                    Text("Экспорт")
+                        .font(UIStyleFont.body(size: 12, weight: .medium))
+                }
+                .foregroundColor(.uiInk)
+                .padding(.vertical, 4)
+                .padding(.horizontal, 10)
+                .background(Color.uiSidebar)
+                .cornerRadius(8)
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.uiHairline, lineWidth: 1))
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 10)
+        .background(Color.uiSidebar.opacity(0.4))
     }
 
     private var header: some View {
@@ -91,7 +167,7 @@ struct TechTermManagerView: View {
                 set: { _ in store.toggle(id: rule.id) }
             ))
             .labelsHidden()
-            .toggleStyle(SwitchToggleStyle(tint: Color(hex: "#10B981")))
+            .toggleStyle(CustomGreenToggleStyle())
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(rule.canonical)
@@ -133,6 +209,68 @@ struct TechTermManagerView: View {
             }
         }
         .padding(20)
+    }
+
+    // MARK: - Действия Импорта и Экспорта
+
+    private func importDictionary() {
+        let panel = NSOpenPanel()
+        panel.title = "Импорт словаря терминов"
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        if let jsonType = UTType(filenameExtension: "json") {
+            panel.allowedContentTypes = [jsonType]
+        }
+
+        if panel.runModal() == .OK, let url = panel.url {
+            let res = store.importFromURL(url)
+            if let err = res.error {
+                importResultMessage = "Ошибка: \(err)"
+            } else {
+                importResultMessage = "Успешно импортировано \(res.imported) терминов."
+            }
+            showingImportAlert = true
+        }
+    }
+
+    private func exportDictionary() {
+        let panel = NSSavePanel()
+        panel.title = "Экспорт словаря терминов"
+        panel.nameFieldStringValue = "golosok_terms_dictionary.json"
+        if let jsonType = UTType(filenameExtension: "json") {
+            panel.allowedContentTypes = [jsonType]
+        }
+
+        if panel.runModal() == .OK, let url = panel.url {
+            _ = store.exportToURL(url)
+        }
+    }
+}
+
+// MARK: - Кастомный стиль переключателя с сохранением сочного цвета при потере фокуса
+
+struct CustomGreenToggleStyle: ToggleStyle {
+    var activeColor = Color(hex: "#10B981")
+    var inactiveColor = Color(hex: "#3F3F46")
+
+    func makeBody(configuration: Configuration) -> some View {
+        HStack {
+            configuration.label
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(configuration.isOn ? activeColor : inactiveColor)
+                .frame(width: 38, height: 22)
+                .overlay(
+                    Circle()
+                        .fill(Color.white)
+                        .padding(2)
+                        .offset(x: configuration.isOn ? 8 : -8)
+                )
+                .animation(.easeInOut(duration: 0.16), value: configuration.isOn)
+                .onTapGesture {
+                    configuration.isOn.toggle()
+                }
+        }
     }
 }
 
