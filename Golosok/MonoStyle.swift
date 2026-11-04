@@ -91,6 +91,10 @@ struct UIStyleFont {
     static func display(size: CGFloat, weight: Font.Weight = .semibold) -> Font {
         return Font.system(size: size, weight: weight, design: .default)
     }
+
+    static func mono(size: CGFloat, weight: Font.Weight = .regular) -> Font {
+        return Font.system(size: size, weight: weight, design: .monospaced)
+    }
 }
 
 // MARK: - Базовые ТАКТИЛЬНЫЕ UI Компоненты
