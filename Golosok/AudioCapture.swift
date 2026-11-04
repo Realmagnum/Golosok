@@ -457,7 +457,8 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         }
         
         let rawText = accumulatedText.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
-        let prettyFormattedText = TextFormatter.formatIntoParagraphs(rawText)
+        let termsCorrectedText = TechTermStore.shared.applyReplacements(to: rawText)
+        let prettyFormattedText = TextFormatter.formatIntoParagraphs(termsCorrectedText)
         let processingTimeSecs = Date().timeIntervalSince(processStartTime)
         let calculatedSpeedup = max(1.0, realAudioSecs / max(0.1, processingTimeSecs))
         

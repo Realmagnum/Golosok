@@ -6,9 +6,11 @@ struct SettingsView: View {
     @ObservedObject var language = LanguageSettings.shared
     @ObservedObject var models = ModelStore.shared
     @ObservedObject var hotKey = HotKeySettings.shared
+    @ObservedObject var techTerms = TechTermStore.shared
     @State private var showingClearHistoryAlert = false
     @State private var showingAboutSheet = false
     @State private var showingLogsSheet = false
+    @State private var showingTechTermsSheet = false
     
     var body: some View {
         ScrollViewReader { proxy in
@@ -247,6 +249,30 @@ HStack {
                                 .foregroundColor(.uiMidGray)
                         }
                         
+                        Divider().background(Color.uiHairline)
+
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("IT-термины и автозамена")
+                                    .font(UIStyleFont.body(size: 13, weight: .medium))
+                                    .foregroundColor(.uiInk)
+                                Text("Компенсация искажений англоязычных терминов")
+                                    .font(UIStyleFont.body(size: 11, weight: .regular))
+                                    .foregroundColor(.uiMidGray)
+                            }
+                            Spacer()
+                            Toggle("", isOn: $techTerms.isReplacementEnabled)
+                                .labelsHidden()
+                                .toggleStyle(SwitchToggleStyle(tint: Color(hex: "#10B981")))
+
+                            UIOutlineButton(title: "Словарь") {
+                                showingTechTermsSheet = true
+                            }
+                        }
+                        .sheet(isPresented: $showingTechTermsSheet) {
+                            TechTermManagerView()
+                        }
+
                         Divider().background(Color.uiHairline)
 
                         HStack {

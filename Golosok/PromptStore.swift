@@ -102,5 +102,12 @@ final class PromptStore: ObservableObject {
             templates.insert(AIPromptDefaults.defaults.first(where: { $0.isProtected })!, at: 0)
             persist()
         }
+
+        // Миграция: добавить restoreTechTerms, если его еще нет
+        if !templates.contains(where: { $0.id == "restoreTechTerms" }),
+           let techPrompt = AIPromptDefaults.template(id: "restoreTechTerms") {
+            templates.insert(techPrompt, at: 1)
+            persist()
+        }
     }
 }
