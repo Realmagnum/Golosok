@@ -538,6 +538,7 @@ struct ContentView: View {
     @State private var cachedSyncedMatchIndices: [Int] = []
     @State private var cachedNativeMatchRanges: [NSRange] = []
     @FocusState private var isSearchFieldFocused: Bool
+    @FocusState private var isSidebarSearchFocused: Bool
     
     private var displayedHistory: [TranscriptionItem] {
         searchText.isEmpty ? audioCapture.history : filteredResults
@@ -588,10 +589,23 @@ struct ContentView: View {
             recomputeSearchMatches()
         }
         .background(
-            Button("CloseSearch") { if isSearchBarVisible { closeSearchBar() } }
+            Button("CloseSearch") {
+                if isSearchBarVisible {
+                    closeSearchBar()
+                } else if isSidebarSearchFocused {
+                    isSidebarSearchFocused = false
+                    NSApp.keyWindow?.makeFirstResponder(nil)
+                }
+            }
                 .keyboardShortcut(.escape)
                 .opacity(0)
                 .frame(width: 0, height: 0)
+        )
+        .background(
+            KeyMonitorView { event in
+                handleKeyDown(event)
+            }
+            .frame(width: 0, height: 0)
         )
         .onDrop(of: [UTType.fileURL], isTargeted: $isFileDropTargeted) { providers in
             handleDroppedProviders(providers)
@@ -732,7 +746,11 @@ struct ContentView: View {
                         Image(systemName: "magnifyingglass").foregroundColor(.uiMidGray)
                             .transition(.scale(scale: 0.7).combined(with: .opacity))
                     }
-                    TextField("Поиск...", text: $searchText).textFieldStyle(PlainTextFieldStyle()).font(UIStyleFont.body(size: 13, weight: .regular)).foregroundColor(.uiInk)
+                    TextField("Поиск...", text: $searchText)
+                        .textFieldStyle(PlainTextFieldStyle())
+                        .font(UIStyleFont.body(size: 13, weight: .regular))
+                        .foregroundColor(.uiInk)
+                        .focused($isSidebarSearchFocused)
                     if !searchText.isEmpty { Button(action: { searchText = "" }) { Image(systemName: "xmark.circle.fill").foregroundColor(.uiMidGray) }.buttonStyle(.plain) }
                 }
                 .padding(8).background(Color.uiPaper).cornerRadius(8).overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.uiHairline, lineWidth: 1))
@@ -748,26 +766,37 @@ struct ContentView: View {
                 .buttonStyle(TactileButtonStyle())
                 .help(String(localized: "Новая заметка"))
             }.padding(.horizontal, 12).padding(.bottom, 8)
-            ScrollView {
-                LazyVStack(spacing: 8) {
-                    if isSearching {
-                        ForEach(0..<4, id: \.self) { _ in
-                            HistorySkeletonCard()
-                        }
-                    } else if displayedHistory.isEmpty {
-                        Text(searchText.isEmpty ? LocalizedStringKey("История пуста") : LocalizedStringKey("Ничего не найдено")).font(UIStyleFont.body(size: 13, weight: .regular)).foregroundColor(.uiMidGray).padding(.vertical, 20)
-                    } else {
-                        ForEach(displayedHistory) { item in
-                            Button {
-                                selectedItemId = item.id
-                                audioCapture.markAsRead(id: item.id) // Гасим точку при клике руками
-                            } label: {
-                                HistoryCard(item: item, isSelected: selectedItemId == item.id)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(spacing: 8) {
+                        if isSearching {
+                            ForEach(0..<4, id: \.self) { _ in
+                                HistorySkeletonCard()
                             }
-                            .buttonStyle(TactileButtonStyle())
+                        } else if displayedHistory.isEmpty {
+                            Text(searchText.isEmpty ? LocalizedStringKey("История пуста") : LocalizedStringKey("Ничего не найдено")).font(UIStyleFont.body(size: 13, weight: .regular)).foregroundColor(.uiMidGray).padding(.vertical, 20)
+                        } else {
+                            ForEach(displayedHistory) { item in
+                                Button {
+                                    isSidebarSearchFocused = false
+                                    selectNote(item)
+                                    NSApp.keyWindow?.makeFirstResponder(nil)
+                                } label: {
+                                    HistoryCard(item: item, isSelected: selectedItemId == item.id)
+                                }
+                                .buttonStyle(TactileButtonStyle())
+                                .id(item.id)
+                            }
+                        }
+                    }.padding(.horizontal, 8)
+                }
+                .onChange(of: selectedItemId) { newId in
+                    if let id = newId {
+                        withAnimation(.easeInOut(duration: 0.15)) {
+                            proxy.scrollTo(id, anchor: nil)
                         }
                     }
-                }.padding(.horizontal, 8)
+                }
             }
         }
         .animation(.easeOut(duration: 0.18), value: isSearching)
@@ -1296,6 +1325,147 @@ struct ContentView: View {
         editableText = ""
         editingItemID = id
         isEditing = true
+    }
+
+    // MARK: - Навигация с клавиатуры по списку заметок (Стрелки ↑ / ↓)
+
+    private func selectNote(_ item: TranscriptionItem) {
+        withAnimation(.easeInOut(duration: 0.15)) {
+            selectedItemId = item.id
+        }
+        audioCapture.markAsRead(id: item.id)
+    }
+
+    private func handleKeyDown(_ event: NSEvent) -> NSEvent? {
+        let isDown = event.keyCode == 125
+        let isUp = event.keyCode == 126
+        guard isDown || isUp else { return event }
+
+        guard currentTab == .history else { return event }
+        guard !displayedHistory.isEmpty else { return event }
+        guard !isEditing else { return event }
+        guard !(isSearchBarVisible && isSearchFieldFocused) else { return event }
+        guard currentSelection == nil else { return event }
+        guard !showAboutSheet,
+              !showPromptManager,
+              !showCreatePrompt,
+              !showingDeleteAlert,
+              aiRequest == nil,
+              !showOnboarding,
+              permissions.onboardingCompleted else { return event }
+
+        guard let window = NSApp.keyWindow,
+              window === NSApp.mainWindow || window.contentView?.window === window else {
+            return event
+        }
+
+        if let responder = window.firstResponder as? NSTextView {
+            if responder.isEditable && !responder.isFieldEditor {
+                return event
+            }
+            if responder.selectedRange().length > 0 {
+                return event
+            }
+        }
+
+        let isCmd = event.modifierFlags.contains(.command)
+
+        if isSidebarSearchFocused {
+            if isDown {
+                isSidebarSearchFocused = false
+                window.makeFirstResponder(nil)
+                if let first = displayedHistory.first {
+                    selectNote(first)
+                }
+                return nil
+            }
+            return event
+        }
+
+        if isCmd && isDown {
+            if let last = displayedHistory.last {
+                selectNote(last)
+            }
+            return nil
+        }
+
+        if isCmd && isUp {
+            if let first = displayedHistory.first {
+                selectNote(first)
+            }
+            return nil
+        }
+
+        if let currentId = selectedItemId,
+           let currentIndex = displayedHistory.firstIndex(where: { $0.id == currentId }) {
+            if isDown {
+                let nextIndex = currentIndex + 1
+                if nextIndex < displayedHistory.count {
+                    selectNote(displayedHistory[nextIndex])
+                }
+                return nil
+            } else if isUp {
+                let prevIndex = currentIndex - 1
+                if prevIndex >= 0 {
+                    selectNote(displayedHistory[prevIndex])
+                } else {
+                    isSidebarSearchFocused = true
+                }
+                return nil
+            }
+        } else {
+            if isDown {
+                if let first = displayedHistory.first {
+                    selectNote(first)
+                }
+            } else if isUp {
+                if let last = displayedHistory.last {
+                    selectNote(last)
+                }
+            }
+            return nil
+        }
+
+        return event
+    }
+}
+
+// MARK: - Монитор клавиатурных событий для навигации
+
+struct KeyMonitorView: NSViewRepresentable {
+    let onKeyDown: (NSEvent) -> NSEvent?
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        context.coordinator.install()
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        context.coordinator.onKeyDown = onKeyDown
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    final class Coordinator {
+        var onKeyDown: ((NSEvent) -> NSEvent?)?
+        private var monitor: Any?
+
+        func install() {
+            guard monitor == nil else { return }
+            monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+                guard let self, let onKeyDown = self.onKeyDown else { return event }
+                return onKeyDown(event)
+            }
+        }
+
+        deinit {
+            if let monitor {
+                NSEvent.removeMonitor(monitor)
+            }
+        }
     }
 }
 
