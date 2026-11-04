@@ -117,6 +117,7 @@ struct UIOutlineButton: View {
         Button(action: action) {
             Text(title)
                 .font(UIStyleFont.body(size: 13, weight: .medium))
+                .lineLimit(1)
                 .foregroundColor(.uiInk)
                 .padding(.vertical, 8)
                 .padding(.horizontal, 14)
@@ -135,6 +136,7 @@ struct UIDestructiveButton: View {
         Button(action: action) {
             Text(title)
                 .font(UIStyleFont.body(size: 13, weight: .medium))
+                .lineLimit(1)
                 .foregroundColor(.uiEmber)
                 .padding(.vertical, 8)
                 .padding(.horizontal, 14)
@@ -153,6 +155,7 @@ struct UIPrimaryButton: View {
         Button(action: action) {
             Text(title)
                 .font(UIStyleFont.body(size: 13, weight: .medium))
+                .lineLimit(1)
                 .foregroundColor(Color.dynamic(light: "#ffffff", dark: "#000000"))
                 .padding(.vertical, 8)
                 .padding(.horizontal, 16)
