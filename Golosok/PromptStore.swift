@@ -42,7 +42,7 @@ final class PromptStore: ObservableObject {
         var p = updated
         p.isProtected = templates[idx].isProtected            // флаг защищённости неизменен
         p.createdAt = templates[idx].createdAt               // сохраняем дату
-        p.isCustom = true                                     // после правки показываем как пользовательский
+        p.isCustom = templates[idx].isProtected ? false : true // защищенные системные промпты остаются системными
         p.title = p.title.trimmingCharacters(in: .whitespacesAndNewlines)
         p.system = p.system.trimmingCharacters(in: .whitespacesAndNewlines)
         if p.icon.trimmingCharacters(in: .whitespaces).isEmpty { p.icon = templates[idx].icon }
@@ -107,6 +107,13 @@ final class PromptStore: ObservableObject {
         if !templates.contains(where: { $0.id == "restoreTechTerms" }),
            let techPrompt = AIPromptDefaults.template(id: "restoreTechTerms") {
             templates.insert(techPrompt, at: 1)
+            persist()
+        }
+
+        // Миграция: добавить techValidator, если его еще нет
+        if !templates.contains(where: { $0.id == "techValidator" }),
+           let valPrompt = AIPromptDefaults.template(id: "techValidator") {
+            templates.insert(valPrompt, at: 2)
             persist()
         }
     }

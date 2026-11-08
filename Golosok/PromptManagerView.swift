@@ -80,14 +80,31 @@ struct PromptManagerView: View {
                         .foregroundColor(.uiInk)
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    if prompt.isCustom {
-                        Text(prompt.title)
-                            .font(UIStyleFont.body(size: 13, weight: .medium))
-                            .foregroundColor(.uiInk)
-                    } else {
-                        Text(LocalizedStringKey(prompt.title))
-                            .font(UIStyleFont.body(size: 13, weight: .medium))
-                            .foregroundColor(.uiInk)
+                    HStack(spacing: 6) {
+                        if prompt.isCustom {
+                            Text(prompt.title)
+                                .font(UIStyleFont.body(size: 13, weight: .medium))
+                                .foregroundColor(.uiInk)
+                        } else {
+                            Text(LocalizedStringKey(prompt.title))
+                                .font(UIStyleFont.body(size: 13, weight: .medium))
+                                .foregroundColor(.uiInk)
+                        }
+
+                        if prompt.isProtected {
+                            HStack(spacing: 3) {
+                                Image(systemName: "lock.fill")
+                                    .font(.system(size: 8, weight: .bold))
+                                Text("Системный")
+                                    .font(UIStyleFont.body(size: 9, weight: .bold))
+                            }
+                            .foregroundColor(Color.uiMidGray)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1.5)
+                            .background(Color.uiCanvas)
+                            .cornerRadius(5)
+                            .overlay(RoundedRectangle(cornerRadius: 5).stroke(Color.uiHairline, lineWidth: 1))
+                        }
                     }
                     Text(prompt.system)
                         .font(UIStyleFont.body(size: 11, weight: .regular))
@@ -102,9 +119,9 @@ struct PromptManagerView: View {
 
             if prompt.isProtected {
                 Image(systemName: "lock.fill")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(.uiMidGray)
-                    .help("Этот промпт нельзя удалить")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.uiMidGray.opacity(0.7))
+                    .help("Этот промпт системный: его можно редактировать, но нельзя удалить")
             } else {
                 Button(action: { store.delete(id: prompt.id) }) {
                     Image(systemName: "trash")
@@ -181,13 +198,11 @@ struct PromptEditorView: View {
         VStack(spacing: 0) {
             header
             Divider().background(Color.uiHairline)
-            ScrollView {
-                content
-            }
+            content
             Divider().background(Color.uiHairline)
             footer
         }
-        .frame(minWidth: 540, idealWidth: 560, minHeight: 520, idealHeight: 620)
+        .frame(minWidth: 560, idealWidth: 600, minHeight: 520, idealHeight: 580)
         .background(Color.uiPaper)
         .onAppear { seed() }
     }
@@ -267,7 +282,7 @@ struct PromptEditorView: View {
                     .font(UIStyleFont.body(size: 13, weight: .regular))
                     .foregroundColor(.uiInk)
                     .scrollContentBackground(.hidden)
-                    .frame(height: 180)
+                    .frame(minHeight: 140, maxHeight: 180)
                     .padding(8)
                     .background(Color.uiCanvas)
                     .cornerRadius(8)

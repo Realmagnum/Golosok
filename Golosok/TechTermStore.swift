@@ -431,18 +431,10 @@ final class TechTermStore: ObservableObject {
             "\(idx + 1). Исходное слово: \"\(c.pattern)\" -> Предложенный термин: \"\(c.canonical)\""
         }.joined(separator: "\n")
 
-        let verifyPrompt = """
-        Ты — специализированный верификатор словаря автозамены IT-терминов после голосовой модели GigaAM.
-        Определи для каждого пункта, является ли исходное слово фонетическим транслитом, созвучным написанием или ослышкой указанного термина в IT-контексте (например, "сайт-бар" для "sidebar", "опен-код" для "OpenCode", "веп-н-код" для "OpenCode", "веб-ваут" для "Vaultwarden" — это ВАЛИДНЫЕ искажения). Дефисные и транслитерационные формы являются нормой голосового распознавания и ДОЛЖНЫ одобряться.
-        
-        Отклоняй ТОЛЬКО очевидные смысловые галлюцинации и совершенно несвязанные русские слова (например: "голосок" -> "Vaultwarden", "программа" -> "OpenCode", "кнопка" -> "SSH" — это НЕТ).
-
-        Список кандидатов:
-        \(itemsPrompt)
-
-        Ответь ТОЛЬКО валидным JSON-объектом без пояснений в формате:
-        {"1": true, "2": false, ...}
-        """
+        // Загружаем системный промпт верификатора из PromptStore (чтобы пользователь мог его настраивать)
+        let validatorTemplate = PromptStore.shared.templates.first(where: { $0.id == "techValidator" })
+        let verifyPrompt = (validatorTemplate?.system ?? AIPromptDefaults.template(id: "techValidator")?.system ?? "")
+            + "\n\nСписок кандидатов для проверки:\n\(itemsPrompt)"
 
         let messages = [
             AIChatMessage(role: "system", content: "Ты — API-валидатор терминов. Отвечай только чистым JSON."),

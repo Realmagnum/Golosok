@@ -1511,9 +1511,13 @@ struct ContentView: View {
     private func commitEditing(for item: TranscriptionItem) {
         editSaveWorkItem?.cancel()
         editSaveWorkItem = nil
-        if editableText != item.text {
-            audioCapture.replaceNoteText(id: item.id, text: editableText)
+        let newText = editableText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if newText != item.text {
+            // При ручном редактировании текста заметки обязательно сбрасываем ASR-этапы,
+            // чтобы скопированный и отображаемый текст полностью соответствовал правкам пользователя
+            audioCapture.replaceNoteText(id: item.id, text: newText, rawText: newText, termsText: newText)
         }
+        textStageMode = .final
         editingItemID = nil
         isEditing = false
     }
