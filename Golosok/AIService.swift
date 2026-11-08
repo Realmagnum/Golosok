@@ -75,7 +75,7 @@ enum AIProviderPresets {
     }
 
     static func preset(id: String) -> AIProviderPreset? {
-        all.first { $0.id == id }
+        builtin.first { $0.id == id } ?? all.first { $0.id == id }
     }
 }
 
@@ -213,48 +213,55 @@ final class AIProviderStore: ObservableObject {
     }
 
     private init() {
+        var names: [String: String] = [:]
         if let savedNames = Self.defaults.dictionary(forKey: "ai.provider.custom_names") as? [String: String] {
-            customDisplayNames = savedNames
+            names = savedNames
         }
+        self.customDisplayNames = names
 
         // Загрузка кастомных провайдеров
+        var loadedCustom: [AIProviderPreset] = []
         if let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
             let fileURL = base.appendingPathComponent("Golosok/custom_ai_providers.json")
             if let data = try? Data(contentsOf: fileURL),
                let list = try? JSONDecoder().decode([AIProviderPreset].self, from: data) {
-                customPresets = list
+                loadedCustom = list
             }
         }
+        self.customPresets = loadedCustom
 
-        let initialPreset = AIProviderPresets.preset(id: Self.defaults.string(forKey: "ai.providerID") ?? "") ?? AIProviderPresets.builtin[0]
-        let currentID = Self.defaults.string(forKey: "ai.providerID") ?? initialPreset.id
-        providerID = currentID
-        baseURL = Self.defaults.string(forKey: "ai.provider.\(currentID).baseURL")
+        let savedID = Self.defaults.string(forKey: "ai.providerID") ?? ""
+        let initialPreset = loadedCustom.first(where: { $0.id == savedID })
+            ?? AIProviderPresets.builtin.first(where: { $0.id == savedID })
+            ?? AIProviderPresets.builtin[0]
+        let currentID = savedID.isEmpty ? initialPreset.id : savedID
+        self.providerID = currentID
+        self.baseURL = Self.defaults.string(forKey: "ai.provider.\(currentID).baseURL")
             ?? Self.defaults.string(forKey: "ai.baseURL")
             ?? initialPreset.baseURL
-        model = Self.defaults.string(forKey: "ai.provider.\(currentID).model")
+        self.model = Self.defaults.string(forKey: "ai.provider.\(currentID).model")
             ?? Self.defaults.string(forKey: "ai.model")
             ?? initialPreset.defaultModel
-        apiKey = KeyStore.get("ai.provider.\(currentID).apiKey")
+        self.apiKey = KeyStore.get("ai.provider.\(currentID).apiKey")
             ?? KeyStore.get("ai.apiKey")
             ?? ""
-        allowInsecureHTTP = Self.defaults.object(forKey: "ai.allowInsecureHTTP") as? Bool ?? true
+        self.allowInsecureHTTP = Self.defaults.object(forKey: "ai.allowInsecureHTTP") as? Bool ?? true
 
         if let rawEffort = Self.defaults.string(forKey: "ai.reasoningEffort"),
            let effort = AIReasoningEffort(rawValue: rawEffort) {
-            reasoningEffort = effort
+            self.reasoningEffort = effort
         } else {
-            reasoningEffort = .low
+            self.reasoningEffort = .low
         }
 
         if let rawBudget = Self.defaults.string(forKey: "ai.thinkingBudgetMode"),
            let budget = AIThinkingBudgetMode(rawValue: rawBudget) {
-            thinkingBudgetMode = budget
+            self.thinkingBudgetMode = budget
         } else {
-            thinkingBudgetMode = .fixed1024
+            self.thinkingBudgetMode = .fixed1024
         }
 
-        maxTokensString = Self.defaults.string(forKey: "ai.maxTokens") ?? "4096" 
+        self.maxTokensString = Self.defaults.string(forKey: "ai.maxTokens") ?? "4096"
     }
 
     func setPresetName(_ newName: String, for presetId: String) {
@@ -318,7 +325,7 @@ final class AIProviderStore: ObservableObject {
     }
 
     var currentPreset: AIProviderPreset? {
-        AIProviderPresets.preset(id: providerID)
+        allPresets.first { $0.id == providerID }
     }
 
     var config: AIProviderConfig {
