@@ -36,6 +36,7 @@ struct GolosokApp: App {
     @ObservedObject var audioCapture = AudioCapture.shared
 
     init() {
+        KeyStore.preloadAllIfNeeded()
         LanguageSettings.shared.apply()
     }
     
