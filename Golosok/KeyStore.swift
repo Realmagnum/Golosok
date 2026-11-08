@@ -8,11 +8,12 @@ enum KeyStore {
     private static let legacyPrefix = "keystore."
 
     private static var memoryCache: [String: String] = [:]
+    private static var existingAccounts: Set<String> = []
     private static var isPreloaded = false
     private static let lock = NSLock()
 
-    /// Разово загружает все ключи приложения в оперативную память при первом обращении.
-    /// За счёт единого запроса `kSecMatchLimitAll` macOS запрашивает доступ к хранилищу максимум один раз.
+    /// Разово загружает список аккаунтов приложения при первом обращении.
+    /// За счёт запроса атрибутов без kSecReturnData macOS не запрашивает пароль на чтение несуществующих ключей.
     private static func preloadAllIfNeeded() {
         guard !isPreloaded else { return }
         isPreloaded = true
@@ -21,7 +22,6 @@ enum KeyStore {
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: serviceName,
             kSecReturnAttributes as String: true,
-            kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitAll
         ]
 
@@ -29,10 +29,8 @@ enum KeyStore {
         let status = SecItemCopyMatching(query as CFDictionary, &result)
         if status == errSecSuccess, let items = result as? [[String: Any]] {
             for item in items {
-                if let account = item[kSecAttrAccount as String] as? String,
-                   let data = item[kSecValueData as String] as? Data,
-                   let str = String(data: data, encoding: .utf8) {
-                    memoryCache[account] = str
+                if let account = item[kSecAttrAccount as String] as? String {
+                    existingAccounts.insert(account)
                 }
             }
         }
@@ -47,11 +45,13 @@ enum KeyStore {
         let cleanValue = value.trimmingCharacters(in: .whitespacesAndNewlines)
         if cleanValue.isEmpty {
             memoryCache.removeValue(forKey: key)
+            existingAccounts.remove(key)
             deleteFromKeychain(key)
             return
         }
 
         memoryCache[key] = cleanValue
+        existingAccounts.insert(key)
         UserDefaults.standard.removeObject(forKey: legacyPrefix + key)
 
         guard let data = cleanValue.data(using: .utf8) else { return }
@@ -87,7 +87,20 @@ enum KeyStore {
             return cached
         }
 
-        // 2. Если в кэше нет, точечно проверяем Keychain на случай добавления извне
+        // 2. Если такого ключа нет в списке аккаунтов Keychain — даже не делаем SecItemCopyMatching с kSecReturnData,
+        // чтобы macOS не показывала системный диалог запроса пароля на несуществующий ключ!
+        if !existingAccounts.contains(key) {
+            // Проверяем legacy UserDefaults на случай старых установок
+            if let legacy = UserDefaults.standard.string(forKey: legacyPrefix + key), !legacy.isEmpty {
+                memoryCache[key] = legacy
+                existingAccounts.insert(key)
+                UserDefaults.standard.removeObject(forKey: legacyPrefix + key)
+                return legacy
+            }
+            return nil
+        }
+
+        // 3. Ключ точно существует в Keychain — считываем его значение один раз и сохраняем в memoryCache
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: serviceName,
@@ -101,13 +114,6 @@ enum KeyStore {
         if status == errSecSuccess, let data = item as? Data, let str = String(data: data, encoding: .utf8) {
             memoryCache[key] = str
             return str
-        }
-
-        // 3. Проверяем legacy UserDefaults и мигрируем
-        if let legacy = UserDefaults.standard.string(forKey: legacyPrefix + key), !legacy.isEmpty {
-            memoryCache[key] = legacy
-            UserDefaults.standard.removeObject(forKey: legacyPrefix + key)
-            return legacy
         }
 
         return nil

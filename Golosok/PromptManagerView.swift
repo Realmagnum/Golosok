@@ -48,9 +48,19 @@ struct PromptManagerView: View {
         .padding(.bottom, 4)
     }
 
+    private var sortedTemplates: [AIPromptTemplate] {
+        // Системные защищенные промпты всегда наверху списка
+        store.templates.sorted { a, b in
+            if a.isProtected != b.isProtected {
+                return a.isProtected && !b.isProtected
+            }
+            return false
+        }
+    }
+
     private var list: some View {
         List {
-            ForEach(store.templates) { prompt in
+            ForEach(sortedTemplates) { prompt in
                 row(prompt)
                     .contextMenu {
                         if !prompt.isProtected {
@@ -174,6 +184,10 @@ struct PromptEditorView: View {
     @State private var icon: String = "sparkles"
     @State private var system: String = ""
 
+    @State private var showingResetAlert = false
+    @State private var previousStateTitle: String?
+    @State private var previousStateSystem: String?
+
     private static let palette: [String] = [
         "sparkles", "wrench.and.screwdriver", "briefcase", "pencil.and.outline",
         "text.quote", "checklist", "doc.text", "character.cursor.ibeam",
@@ -205,13 +219,33 @@ struct PromptEditorView: View {
         .frame(minWidth: 560, idealWidth: 600, minHeight: 520, idealHeight: 580)
         .background(Color.uiPaper)
         .onAppear { seed() }
+        .alert(isBuiltin ? "Восстановить исходный промпт?" : "Восстановить прошлое состояние?", isPresented: $showingResetAlert) {
+            Button("Отмена", role: .cancel) { }
+            Button("Восстановить", role: .destructive) {
+                if isBuiltin {
+                    if let id = prompt?.id {
+                        store.reset(id: id)
+                        seed()
+                    }
+                } else if let prevTitle = previousStateTitle, let prevSys = previousStateSystem {
+                    title = prevTitle
+                    system = prevSys
+                }
+            }
+        } message: {
+            if isBuiltin {
+                Text("Все ваши правки этого системного промпта будут сброшены к оригинальной заводской инструкции.")
+            } else {
+                Text("Вернуть текст заголовка и инструкции к состоянию на момент открытия окна.")
+            }
+        }
     }
 
     private var header: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 10) {
             ZStack {
-                Circle().fill(Color.uiCanvas).frame(width: 30, height: 30)
-                Image(systemName: icon).font(.system(size: 13, weight: .semibold)).foregroundColor(.uiInk)
+                Circle().fill(Color.uiCanvas).frame(width: 32, height: 32)
+                Image(systemName: icon).font(.system(size: 14, weight: .semibold)).foregroundColor(.uiInk)
             }
             Text(titleKey)
                 .font(UIStyleFont.display(size: 15, weight: .bold))
@@ -228,8 +262,9 @@ struct PromptEditorView: View {
             }
             .buttonStyle(TactileButtonStyle())
         }
-        .padding(20)
-        .padding(.bottom, 4)
+        .padding(.horizontal, 24)
+        .padding(.top, 20)
+        .padding(.bottom, 14)
     }
 
     private var content: some View {
@@ -243,7 +278,9 @@ struct PromptEditorView: View {
                     .textFieldStyle(PlainTextFieldStyle())
                     .font(UIStyleFont.body(size: 13, weight: .regular))
                     .foregroundColor(.uiInk)
-                    .padding(8)
+                    .frame(height: 22)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
                     .background(Color.uiCanvas)
                     .cornerRadius(8)
                     .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.uiHairline, lineWidth: 1))
@@ -283,7 +320,8 @@ struct PromptEditorView: View {
                     .foregroundColor(.uiInk)
                     .scrollContentBackground(.hidden)
                     .frame(minHeight: 140, maxHeight: 180)
-                    .padding(8)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 8)
                     .background(Color.uiCanvas)
                     .cornerRadius(8)
                     .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.uiHairline, lineWidth: 1))
@@ -294,14 +332,19 @@ struct PromptEditorView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(20)
+        .padding(.horizontal, 24)
+        .padding(.vertical, 16)
     }
 
     private var footer: some View {
         HStack(spacing: 8) {
             if isBuiltin {
-                UIOutlineButton(title: "Сбросить") {
-                    if let id = prompt?.id { store.reset(id: id); seed() }
+                UIOutlineButton(title: "Восстановить исходный") {
+                    showingResetAlert = true
+                }
+            } else if isEditingExisting {
+                UIOutlineButton(title: "Откатить правки") {
+                    showingResetAlert = true
                 }
             }
             Spacer()
@@ -309,7 +352,8 @@ struct PromptEditorView: View {
             UIPrimaryButton(title: "Сохранить") { save() }
                 .disabled(!canSave)
         }
-        .padding(20)
+        .padding(.horizontal, 24)
+        .padding(.vertical, 16)
     }
 
     // MARK: - Private
@@ -319,6 +363,8 @@ struct PromptEditorView: View {
         title = p.title
         icon = p.icon
         system = p.system
+        previousStateTitle = p.title
+        previousStateSystem = p.system
     }
 
     private func save() {

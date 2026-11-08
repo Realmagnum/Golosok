@@ -5830,6 +5830,38 @@
           }
         }
       }
+    },
+    "Восстановить IT-термины": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restore IT terms"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Восстановить IT-термины"
+          }
+        }
+      }
+    },
+    "Верификатор IT-терминов": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "IT terms validator"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Верификатор IT-терминов"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
