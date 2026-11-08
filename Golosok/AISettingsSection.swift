@@ -301,15 +301,29 @@ struct AIProviderSection: View {
                             .foregroundColor(isSelected ? .uiPaper : .uiInk)
 
                         if isSelected {
-                            Image(systemName: "star.fill")
-                                .font(.system(size: 9))
-                                .foregroundColor(Color(hex: "#F59E0B"))
-                                .help("Основной провайдер")
+                            HStack(spacing: 3) {
+                                Image(systemName: "star.fill")
+                                    .font(.system(size: 10, weight: .bold))
+                                Text("Основной")
+                                    .font(UIStyleFont.body(size: 9, weight: .bold))
+                            }
+                            .foregroundColor(Color(hex: "#F59E0B"))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color(hex: "#F59E0B").opacity(0.18))
+                            .cornerRadius(6)
                         } else if isFailover {
-                            Image(systemName: "shield.fill")
-                                .font(.system(size: 9))
-                                .foregroundColor(Color(hex: "#3B82F6"))
-                                .help("Резервный провайдер (Failover)")
+                            HStack(spacing: 3) {
+                                Image(systemName: "shield.lefthalf.filled")
+                                    .font(.system(size: 11, weight: .bold))
+                                Text("Резерв")
+                                    .font(UIStyleFont.body(size: 9, weight: .bold))
+                            }
+                            .foregroundColor(Color(hex: "#3B82F6"))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color(hex: "#3B82F6").opacity(0.14))
+                            .cornerRadius(6)
                         }
 
                         Text(LocalizedStringKey("Облако"))
@@ -409,23 +423,43 @@ struct PresetChip: View {
 
     var body: some View {
         Button(action: onSelect) {
-            HStack(spacing: 6) {
+            HStack(spacing: 8) {
                 if isSelected {
-                    Image(systemName: "star.fill")
-                        .font(.system(size: 8))
-                        .foregroundColor(Color(hex: "#F59E0B"))
+                    // Яркий статус основного провайдера
+                    HStack(spacing: 4) {
+                        Image(systemName: "star.fill")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(Color(hex: "#F59E0B"))
+                        Text("Основной")
+                            .font(UIStyleFont.body(size: 9, weight: .bold))
+                            .foregroundColor(Color(hex: "#F59E0B"))
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color(hex: "#F59E0B").opacity(0.18))
+                    .cornerRadius(6)
                 } else if isFailover {
-                    Image(systemName: "shield.fill")
-                        .font(.system(size: 8))
-                        .foregroundColor(Color(hex: "#3B82F6"))
+                    // Четкий статус резервного провайдера
+                    HStack(spacing: 4) {
+                        Image(systemName: "shield.lefthalf.filled")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(Color(hex: "#3B82F6"))
+                        Text("Резерв")
+                            .font(UIStyleFont.body(size: 9, weight: .bold))
+                            .foregroundColor(Color(hex: "#3B82F6"))
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color(hex: "#3B82F6").opacity(0.14))
+                    .cornerRadius(6)
                 } else {
                     Circle()
-                        .fill(Color.uiMidGray)
+                        .fill(Color.uiMidGray.opacity(0.5))
                         .frame(width: 6, height: 6)
                 }
 
                 Text(preset.name)
-                    .font(UIStyleFont.body(size: 12, weight: .medium))
+                    .font(UIStyleFont.body(size: 12, weight: .semibold))
                     .foregroundColor(isSelected ? .uiPaper : .uiInk)
                     .lineLimit(1)
             }
