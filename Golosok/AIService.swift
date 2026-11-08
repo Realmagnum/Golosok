@@ -170,7 +170,6 @@ final class AIProviderStore: ObservableObject {
     @Published var apiKey: String {
         didSet {
             if apiKey != oldValue {
-                KeyStore.set(apiKey, for: "ai.apiKey")
                 KeyStore.set(apiKey, for: "ai.provider.\(providerID).apiKey")
             }
         }
@@ -240,9 +239,10 @@ final class AIProviderStore: ObservableObject {
         self.providerID = currentID
         self.isFailoverEnabled = Self.defaults.object(forKey: "ai.failover.enabled") as? Bool ?? false
         self.failoverProviderID = Self.defaults.string(forKey: "ai.failover.providerID") ?? "ollama"
-        self.baseURL = Self.defaults.string(forKey: "ai.provider.\(currentID).baseURL")
+        let resolvedBaseURL = Self.defaults.string(forKey: "ai.provider.\(currentID).baseURL")
             ?? Self.defaults.string(forKey: "ai.baseURL")
             ?? initialPreset.baseURL
+        self.baseURL = resolvedBaseURL
         var resolvedModel = Self.defaults.string(forKey: "ai.provider.\(currentID).model")
             ?? Self.defaults.string(forKey: "ai.model")
             ?? initialPreset.defaultModel
@@ -258,6 +258,7 @@ final class AIProviderStore: ObservableObject {
         }
         self.model = resolvedModel
         self.apiKey = KeyStore.get("ai.provider.\(currentID).apiKey")
+            ?? (resolvedBaseURL.contains("8317") ? KeyStore.get("ai.provider.openai.apiKey") : nil)
             ?? KeyStore.get("ai.apiKey")
             ?? ""
         self.allowInsecureHTTP = Self.defaults.object(forKey: "ai.allowInsecureHTTP") as? Bool ?? true
@@ -410,7 +411,10 @@ final class AIProviderStore: ObservableObject {
             savedModel = "deepseek-flash"
         }
         model = savedModel
-        apiKey = KeyStore.get("ai.provider.\(preset.id).apiKey") ?? (preset.needsKey ? "" : "")
+        apiKey = KeyStore.get("ai.provider.\(preset.id).apiKey")
+            ?? (preset.baseURL.contains("8317") ? KeyStore.get("ai.provider.openai.apiKey") : nil)
+            ?? KeyStore.get("ai.apiKey")
+            ?? (preset.needsKey ? "" : "")
 
         testResult = nil
         testOK = false
