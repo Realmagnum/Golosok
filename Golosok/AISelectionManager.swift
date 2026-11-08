@@ -182,7 +182,8 @@ final class AISelectionManager {
         // Подключаем монитор Esc для возможности отмены длинной генерации
         installEscMonitor()
 
-        let messages = template.messages(for: text)
+        let dynamicCandidates = TechTermStore.shared.findFuzzyCandidateTerms(for: text, limit: 4)
+        let messages = template.messages(for: text, dynamicTerms: dynamicCandidates)
         let config = AIProviderStore.shared.config
 
         currentTask = AIService.shared.chat(messages: messages, using: config, promptLength: text.count) { [weak self] result in

@@ -625,7 +625,8 @@ struct AIResultSheet: View {
             return
         }
 
-        let messages = request.template.messages(for: request.noteText)
+        let dynamicCandidates = TechTermStore.shared.findFuzzyCandidateTerms(for: request.noteText, limit: 4)
+        let messages = request.template.messages(for: request.noteText, dynamicTerms: dynamicCandidates)
         currentTask = AIService.shared.chatStream(
             messages: messages,
             using: AIProviderStore.shared.config,

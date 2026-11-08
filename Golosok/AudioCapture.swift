@@ -516,7 +516,8 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
                     self.transcribedText = "ИИ: \(template.title)…"
                 }
                 let semaphore = DispatchSemaphore(value: 0)
-                let messages = template.messages(for: termsCorrectedText)
+                let dynamicCandidates = TechTermStore.shared.findFuzzyCandidateTerms(for: termsCorrectedText, limit: 4)
+                let messages = template.messages(for: termsCorrectedText, dynamicTerms: dynamicCandidates)
                 AIService.shared.chat(messages: messages, using: AIProviderStore.shared.config, promptLength: termsCorrectedText.count) { result in
                     switch result {
                     case .success(let aiOutput):
@@ -906,7 +907,8 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
                         self.transcribedText = "ИИ: \(template.title)…"
                     }
                     let semaphore = DispatchSemaphore(value: 0)
-                    let messages = template.messages(for: termsCorrectedText)
+                    let dynamicCandidates = TechTermStore.shared.findFuzzyCandidateTerms(for: termsCorrectedText, limit: 4)
+                    let messages = template.messages(for: termsCorrectedText, dynamicTerms: dynamicCandidates)
                     AIService.shared.chat(messages: messages, using: AIProviderStore.shared.config, promptLength: termsCorrectedText.count) { result in
                         switch result {
                         case .success(let aiOutput):
