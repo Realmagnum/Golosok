@@ -13,6 +13,7 @@ struct SettingsView: View {
     @State private var showingLogsSheet = false
     @State private var showingTechTermsSheet = false
     @State private var showingAddInferenceSheet = false
+    @State private var showingPromptManagerSheet = false
     
     var body: some View {
         ScrollViewReader { proxy in
@@ -406,6 +407,26 @@ struct SettingsView: View {
                                     return UIDropdownOption(text, icon: t.icon, value: t.id)
                                 }, width: 220)
                             }
+                        }
+
+                        Divider().background(Color.uiHairline)
+
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Управлять промптами")
+                                    .font(UIStyleFont.body(size: 13, weight: .medium))
+                                    .foregroundColor(.uiInk)
+                                Text("Создавайте, редактируйте и удаляйте ИИ-промпты под свои задачи")
+                                    .font(UIStyleFont.body(size: 11, weight: .regular))
+                                    .foregroundColor(.uiMidGray)
+                            }
+                            Spacer()
+                            UIOutlineButton(title: "Открыть") {
+                                showingPromptManagerSheet = true
+                            }
+                        }
+                        .sheet(isPresented: $showingPromptManagerSheet) {
+                            PromptManagerView()
                         }
                     }
                 }
