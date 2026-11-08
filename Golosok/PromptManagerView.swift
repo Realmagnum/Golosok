@@ -127,23 +127,27 @@ struct PromptManagerView: View {
             .contentShape(Rectangle())
             .onTapGesture { editing = prompt }
 
-            if prompt.isProtected {
-                Image(systemName: "lock.fill")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(.uiMidGray.opacity(0.7))
-                    .help("Этот промпт системный: его можно редактировать, но нельзя удалить")
-            } else {
-                Button(action: { store.delete(id: prompt.id) }) {
-                    Image(systemName: "trash")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(.uiMidGray)
+            ZStack {
+                if prompt.isProtected {
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(.uiMidGray.opacity(0.7))
                         .frame(width: 26, height: 26)
-                        .background(Color.uiCanvas)
-                        .clipShape(Circle())
+                        .help("Этот промпт системный: его можно редактировать, но нельзя удалить")
+                } else {
+                    Button(action: { store.delete(id: prompt.id) }) {
+                        Image(systemName: "trash")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.uiMidGray)
+                            .frame(width: 26, height: 26)
+                            .background(Color.uiCanvas)
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(TactileButtonStyle())
+                    .help("Удалить")
                 }
-                .buttonStyle(TactileButtonStyle())
-                .help("Удалить")
             }
+            .frame(width: 28, height: 28, alignment: .center)
         }
     }
 

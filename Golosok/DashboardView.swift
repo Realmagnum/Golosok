@@ -231,8 +231,10 @@ struct DashboardCalculator: Equatable {
 
 struct DashboardView: View {
     @ObservedObject var audioCapture = AudioCapture.shared
+    @ObservedObject var techTerms = TechTermStore.shared
     @State private var chartRange: StatsRange = .week
     @State private var stats: DashboardCalculator = DashboardCalculator.empty
+    @State private var showingCandidatesSheet = false
     
     let cardBackground = Color.dynamic(light: "#0a0a0a", dark: "#ffffff")
     let primaryTextColor = Color.dynamic(light: "#ffffff", dark: "#0a0a0a")
@@ -240,7 +242,7 @@ struct DashboardView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
-                HStack {
+                HStack(spacing: 8) {
                     Text("УРОВЕНЬ:")
                         .font(UIStyleFont.body(size: 11, weight: .bold))
                         .tracking(1.0)
@@ -248,6 +250,24 @@ struct DashboardView: View {
                     UIBadge(text: stats.levelName)
                     
                     Spacer()
+
+                    // Плашка кандидатов автообучения (если есть)
+                    if !techTerms.candidates.isEmpty {
+                        Button(action: { showingCandidatesSheet = true }) {
+                            HStack(spacing: 5) {
+                                Image(systemName: "sparkles")
+                                    .font(.system(size: 10, weight: .bold))
+                                Text("Термины: \(techTerms.candidates.count)")
+                                    .font(UIStyleFont.body(size: 10, weight: .bold))
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 10).padding(.vertical, 6)
+                            .background(Color(hex: "#10B981")).cornerRadius(12)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Просмотр и подтверждение новых кандидатов IT-терминов от ИИ")
+                    }
+
                     if let update = audioCapture.updateInfo {
                         HStack(spacing: 6) {
                             if audioCapture.isDownloadingUpdate {
@@ -312,6 +332,9 @@ struct DashboardView: View {
         .onAppear { apply() }
         .onChange(of: audioCapture.history.count) { _ in apply() }
         .onChange(of: chartRange) { _ in apply() }
+        .sheet(isPresented: $showingCandidatesSheet) {
+            TechTermCandidatesView()
+        }
     }
     
     private func apply() {
