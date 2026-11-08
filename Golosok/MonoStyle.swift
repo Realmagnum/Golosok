@@ -49,6 +49,22 @@ extension NSColor {
             return NSColor.systemYellow.withAlphaComponent(0.70)
         }
     }
+
+    static let itTermHighlight: NSColor = NSColor(name: nil) { appearance in
+        if appearance.name == .darkAqua {
+            return NSColor(hex: "#10B981").withAlphaComponent(0.28)
+        } else {
+            return NSColor(hex: "#10B981").withAlphaComponent(0.20)
+        }
+    }
+
+    static let aiReplacedHighlight: NSColor = NSColor(name: nil) { appearance in
+        if appearance.name == .darkAqua {
+            return NSColor(hex: "#8B5CF6").withAlphaComponent(0.32)
+        } else {
+            return NSColor(hex: "#8B5CF6").withAlphaComponent(0.22)
+        }
+    }
 }
 
 // MARK: - Hex & Dynamic Initializers for SwiftUI Color
@@ -91,6 +107,10 @@ struct UIStyleFont {
     static func display(size: CGFloat, weight: Font.Weight = .semibold) -> Font {
         return Font.system(size: size, weight: weight, design: .default)
     }
+
+    static func mono(size: CGFloat, weight: Font.Weight = .regular) -> Font {
+        return Font.system(size: size, weight: weight, design: .monospaced)
+    }
 }
 
 // MARK: - Базовые ТАКТИЛЬНЫЕ UI Компоненты
@@ -113,6 +133,7 @@ struct UIOutlineButton: View {
         Button(action: action) {
             Text(title)
                 .font(UIStyleFont.body(size: 13, weight: .medium))
+                .lineLimit(1)
                 .foregroundColor(.uiInk)
                 .padding(.vertical, 8)
                 .padding(.horizontal, 14)
@@ -131,6 +152,7 @@ struct UIDestructiveButton: View {
         Button(action: action) {
             Text(title)
                 .font(UIStyleFont.body(size: 13, weight: .medium))
+                .lineLimit(1)
                 .foregroundColor(.uiEmber)
                 .padding(.vertical, 8)
                 .padding(.horizontal, 14)
@@ -149,6 +171,7 @@ struct UIPrimaryButton: View {
         Button(action: action) {
             Text(title)
                 .font(UIStyleFont.body(size: 13, weight: .medium))
+                .lineLimit(1)
                 .foregroundColor(Color.dynamic(light: "#ffffff", dark: "#000000"))
                 .padding(.vertical, 8)
                 .padding(.horizontal, 16)

@@ -6,9 +6,13 @@ struct SettingsView: View {
     @ObservedObject var language = LanguageSettings.shared
     @ObservedObject var models = ModelStore.shared
     @ObservedObject var hotKey = HotKeySettings.shared
+    @ObservedObject var techTerms = TechTermStore.shared
+    @ObservedObject var promptStore = PromptStore.shared
     @State private var showingClearHistoryAlert = false
     @State private var showingAboutSheet = false
     @State private var showingLogsSheet = false
+    @State private var showingTechTermsSheet = false
+    @State private var showingAddInferenceSheet = false
     
     var body: some View {
         ScrollViewReader { proxy in
@@ -208,6 +212,38 @@ struct SettingsView: View {
                             Spacer()
                             UIBadge(text: "ESC")
                         }
+
+                        Divider().overlay(Color.uiHairline)
+
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(LocalizedStringKey("ИИ-обработка выделения"))
+                                    .font(UIStyleFont.body(size: 13, weight: .medium))
+                                    .foregroundColor(.uiInk)
+                                if hotKey.isCapturingSelection {
+                                    Text(LocalizedStringKey("HotKey.Capture"))
+                                        .font(UIStyleFont.body(size: 11, weight: .regular))
+                                        .foregroundColor(.uiMidGray)
+                                } else if hotKey.isSelectionTaken {
+                                    Text(LocalizedStringKey("HotKey.Taken"))
+                                        .font(UIStyleFont.body(size: 11, weight: .regular))
+                                        .foregroundColor(.uiWarn)
+                                } else {
+                                    Text(LocalizedStringKey("Замена выделенного текста по промпту ИИ"))
+                                        .font(UIStyleFont.body(size: 11, weight: .regular))
+                                        .foregroundColor(.uiMidGray)
+                                }
+                            }
+                            Spacer()
+                            if hotKey.isCapturingSelection {
+                                UIBadge(text: "…")
+                            } else {
+                                UIBadge(text: hotKey.selectionHotKeyName)
+                            }
+                            UIOutlineButton(title: hotKey.isCapturingSelection ? LocalizedStringKey("Отмена") : LocalizedStringKey("Изменить")) {
+                                if hotKey.isCapturingSelection { hotKey.endCaptureSelection() } else { hotKey.beginCaptureSelection() }
+                            }
+                        }
                     }
                 }
                 
@@ -219,7 +255,7 @@ struct SettingsView: View {
                             .tracking(1.0)
                             .foregroundColor(.uiMidGray)
                         
-HStack {
+                        HStack {
                             Text("Языковая модель")
                                 .font(UIStyleFont.body(size: 13, weight: .medium))
                                 .foregroundColor(.uiInk)
@@ -227,9 +263,20 @@ HStack {
                             UIDropdownPicker(selection: Binding(
                                 get: { models.activeModelID },
                                 set: { models.activeModelID = $0 }
-                            ), options: ModelStore.catalog.map { m in
-                                .init(LocalizedStringKey(m.name), value: m.id)
+                            ), options: models.allModels.map { m in
+                                if m.isCustom {
+                                    return UIDropdownOption(m.name, value: m.id)
+                                } else {
+                                    return UIDropdownOption(LocalizedStringKey(m.name), value: m.id)
+                                }
                             }, width: 200)
+
+                            UIOutlineButton(title: "+ Инференс") {
+                                showingAddInferenceSheet = true
+                            }
+                        }
+                        .sheet(isPresented: $showingAddInferenceSheet) {
+                            AddCustomInferenceSheet()
                         }
 
                         ActiveModelStatusRow()
@@ -247,6 +294,49 @@ HStack {
                                 .foregroundColor(.uiMidGray)
                         }
                         
+                        Divider().background(Color.uiHairline)
+
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("IT-термины и автозамена")
+                                    .font(UIStyleFont.body(size: 13, weight: .medium))
+                                    .foregroundColor(.uiInk)
+                                Text("Компенсация искажений англоязычных терминов")
+                                    .font(UIStyleFont.body(size: 11, weight: .regular))
+                                    .foregroundColor(.uiMidGray)
+                            }
+                            Spacer()
+                            Toggle("", isOn: $techTerms.isReplacementEnabled)
+                                .labelsHidden()
+                                .toggleStyle(SwitchToggleStyle(tint: Color(hex: "#10B981")))
+
+                            UIOutlineButton(title: "Словарь") {
+                                showingTechTermsSheet = true
+                            }
+                        }
+                        .sheet(isPresented: $showingTechTermsSheet) {
+                            TechTermManagerView()
+                        }
+
+                        if techTerms.isReplacementEnabled && audioCapture.autoAIProcessEnabled {
+                            Divider().background(Color.uiHairline)
+
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Автопополнение словаря из правок ИИ")
+                                        .font(UIStyleFont.body(size: 13, weight: .medium))
+                                        .foregroundColor(.uiInk)
+                                    Text("Добавление исключений и терминов при исправлении текста моделью")
+                                        .font(UIStyleFont.body(size: 11, weight: .regular))
+                                        .foregroundColor(.uiMidGray)
+                                }
+                                Spacer()
+                                Toggle("", isOn: $techTerms.isAutoLearnEnabled)
+                                    .labelsHidden()
+                                    .toggleStyle(SwitchToggleStyle(tint: Color(hex: "#10B981")))
+                            }
+                        }
+
                         Divider().background(Color.uiHairline)
 
                         HStack {
@@ -279,6 +369,47 @@ HStack {
                     }
                 }
                 
+                // РАЗДЕЛ 3.4: АВТОМАТИЧЕСКАЯ ИИ-ОБРАБОТКА
+                UICard {
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text("АВТОМАТИЧЕСКАЯ ИИ-ОБРАБОТКА")
+                            .font(UIStyleFont.body(size: 11, weight: .bold))
+                            .tracking(1.0)
+                            .foregroundColor(.uiMidGray)
+
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Применять ИИ-шаблон к каждой записи")
+                                    .font(UIStyleFont.body(size: 13, weight: .medium))
+                                    .foregroundColor(.uiInk)
+                                Text("Автоматическая обработка текста сразу после распознавания речи")
+                                    .font(UIStyleFont.body(size: 11, weight: .regular))
+                                    .foregroundColor(.uiMidGray)
+                            }
+                            Spacer()
+                            Toggle("", isOn: $audioCapture.autoAIProcessEnabled)
+                                .labelsHidden()
+                                .toggleStyle(SwitchToggleStyle(tint: Color(hex: "#10B981")))
+                        }
+
+                        if audioCapture.autoAIProcessEnabled {
+                            Divider().background(Color.uiHairline)
+
+                            HStack {
+                                Text("Выбранный шаблон")
+                                    .font(UIStyleFont.body(size: 13, weight: .medium))
+                                    .foregroundColor(.uiInk)
+                                Spacer()
+                                UIDropdownPicker(selection: $audioCapture.autoAIProcessTemplateID, options: promptStore.templates.map { t in
+                                    let isBuiltin = AIPromptDefaults.builtinIDs.contains(t.id)
+                                    let text = (!t.isCustom || isBuiltin) ? String(localized: String.LocalizationValue(t.title)) : t.title
+                                    return UIDropdownOption(text, icon: t.icon, value: t.id)
+                                }, width: 220)
+                            }
+                        }
+                    }
+                }
+
                 // РАЗДЕЛ 3.5: ИИ-ПРОВАЙДЕР
                 AIProviderSection()
 
@@ -330,15 +461,17 @@ struct ActiveModelStatusRow: View {
         if let active = models.model(named: models.activeModelID), !active.isBundled {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(LocalizedStringKey(active.name))
+                    Text(active.isCustom ? active.name : String(localized: String.LocalizationValue(active.name)))
                         .font(UIStyleFont.body(size: 13, weight: .medium))
                         .foregroundColor(.uiInk)
-                    Text("\(active.sizeMB) МБ — Apple Metal")
+                    Text(active.isCustom ? (active.endpointURL ?? "HTTP API") : "\(active.sizeMB) МБ — Apple Metal")
                         .font(UIStyleFont.body(size: 11, weight: .regular))
                         .foregroundColor(.uiMidGray)
                 }
                 Spacer()
-                if models.downloadingID == active.id {
+                if active.isCustom {
+                    UIOutlineButton(title: "Удалить") { models.removeCustomModel(id: active.id) }
+                } else if models.downloadingID == active.id {
                     ProgressView(value: models.downloadProgress)
                         .frame(width: 90)
                     Text(LocalizedStringKey(models.downloadStatus))
@@ -355,5 +488,98 @@ struct ActiveModelStatusRow: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Модальное окно добавления кастомного инференса
+
+struct AddCustomInferenceSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var models = ModelStore.shared
+
+    @State private var name: String = ""
+    @State private var endpointURL: String = "http://100.64.0.6:9292/v1/audio/transcriptions"
+    @State private var modelIdentifier: String = "vibevoice-asr-gpu"
+    @State private var apiKey: String = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Новый инференс распознавания")
+                .font(UIStyleFont.display(size: 15, weight: .bold))
+                .foregroundColor(.uiInk)
+
+            Text("Подключение внешнего ASR-сервера (OpenAI-совместимый API /audio/transcriptions, llama-swap, vLLM, Whisper server).")
+                .font(UIStyleFont.body(size: 11, weight: .regular))
+                .foregroundColor(.uiMidGray)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Название профиля")
+                    .font(UIStyleFont.body(size: 12, weight: .medium))
+                    .foregroundColor(.uiMidGray)
+                TextField("например: VibeVoice Remote GPU", text: $name)
+                    .textFieldStyle(.plain)
+                    .padding(8)
+                    .background(Color.uiSidebar)
+                    .cornerRadius(8)
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.uiHairline, lineWidth: 1))
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Endpoint URL")
+                    .font(UIStyleFont.body(size: 12, weight: .medium))
+                    .foregroundColor(.uiMidGray)
+                TextField("http://host:port/v1/audio/transcriptions", text: $endpointURL)
+                    .textFieldStyle(.plain)
+                    .padding(8)
+                    .background(Color.uiSidebar)
+                    .cornerRadius(8)
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.uiHairline, lineWidth: 1))
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Идентификатор модели (model param)")
+                    .font(UIStyleFont.body(size: 12, weight: .medium))
+                    .foregroundColor(.uiMidGray)
+                TextField("например: vibevoice-asr-gpu или whisper-1", text: $modelIdentifier)
+                    .textFieldStyle(.plain)
+                    .padding(8)
+                    .background(Color.uiSidebar)
+                    .cornerRadius(8)
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.uiHairline, lineWidth: 1))
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("API Ключ (опционально)")
+                    .font(UIStyleFont.body(size: 12, weight: .medium))
+                    .foregroundColor(.uiMidGray)
+                SecureField("Bearer token, если требуется", text: $apiKey)
+                    .textFieldStyle(.plain)
+                    .padding(8)
+                    .background(Color.uiSidebar)
+                    .cornerRadius(8)
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.uiHairline, lineWidth: 1))
+            }
+
+            HStack {
+                Spacer()
+                UIOutlineButton(title: "Отмена") {
+                    dismiss()
+                }
+                UIPrimaryButton(title: "Сохранить") {
+                    models.addCustomModel(
+                        name: name,
+                        endpointURL: endpointURL,
+                        modelIdentifier: modelIdentifier,
+                        apiKey: apiKey
+                    )
+                    dismiss()
+                }
+                .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || endpointURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+            .padding(.top, 8)
+        }
+        .padding(24)
+        .frame(width: 480)
+        .background(Color.uiPaper)
     }
 }

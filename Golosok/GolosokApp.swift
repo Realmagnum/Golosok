@@ -3,6 +3,7 @@ import AppKit
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
+        KeyStore.migrateAllIfNeeded()
         let mic = PermissionManager.shared.isMicGranted
         let ax = PermissionManager.shared.isAccessibilityGranted
         AppLogger.shared.info("App", "Запуск Golosok",
@@ -21,6 +22,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             if hotKey.mode == .pushToTalk, AudioCapture.shared.isRecording {
                 AudioCapture.shared.stopRecording()
             }
+        }
+        hotKey.onSelectionHotKeyPressed = {
+            AISelectionManager.shared.trigger()
         }
         hotKey.register()
     }

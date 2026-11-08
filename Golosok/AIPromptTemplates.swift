@@ -20,27 +20,42 @@ struct AIPromptTemplate: Identifiable, Codable, Equatable {
         self.createdAt = createdAt
     }
 
-    func messages(for text: String) -> [AIChatMessage] {
+    func messages(for text: String, dynamicTerms: [TechTermRule] = []) -> [AIChatMessage] {
+        var effectiveSystem = self.system
+        
+        if !dynamicTerms.isEmpty {
+            let hints = dynamicTerms.map { rule in
+                let pats = rule.patterns.joined(separator: ", ")
+                return "- '\(rule.canonical)' (возможные созвучные искажения: \(pats))"
+            }.joined(separator: "\n")
+            
+            effectiveSystem += "\n\nКонтекстные подсказки по IT-терминам, которые могли прозвучать:\n\(hints)"
+        }
+
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let userPrompt = "Текст расшифровки:\n\n\"\"\"\n\(trimmed)\n\"\"\"\n\nВыполни задание."
+        let userPrompt = "Текст расшифровки:\n\n\"\"\"\n\(trimmed)\n\"\"\"\n\nВыполни задание. Сразу выведи готовый результат без вводных слов и без избыточных рассуждений."
         return [
-            AIChatMessage(role: "system", content: system),
+            AIChatMessage(role: "system", content: effectiveSystem),
             AIChatMessage(role: "user", content: userPrompt)
         ]
     }
 }
 
 enum AIPromptDefaults {
-    private static let commonRules = "Расшифровка сделана голосовой моделью и может содержать ошибки распознавания — исправляй очевидные опечатки по контексту. Отвечай без вводных фраз и без воды, только результат."
+    private static let commonRules = "Расшифровка сделана голосовой моделью и может содержать ошибки распознавания — исправляй очевидные опечатки по контексту. Отвечай сразу готовым результатом без вводных фраз, без избыточных рассуждений и без воды."
 
     /// Встроенные промпты при первом запуске. Один (polish) защищён от удаления.
     static let defaults: [AIPromptTemplate] = [
+        // ТЕХНИЧЕСКАЯ РЕСТАВРАЦИЯ
+        .init(id: "restoreTechTerms", title: "Восстановить IT-термины", icon: "terminal",
+              system: "Ты — специализированный модуль восстановления технических англоязычных терминов и code-switching после голосовой модели GigaAM. Голосовая модель систематически искажает оригинальные англоязычные IT-термины, названия утилит, библиотек, протоколов, технологий и брендов в фонетический транслит или случайные созвучные русские слова. Твоя задача: найти такие искажения и восстановить их правильное каноническое написание на латинице с учетом профессионального IT-контекста. Не подменяй существующие русские слова, если они не являются искажением англоязычного термина. Не меняй смысл и структуру русской фразы. Исправь все орфографические, пунктуационные и грамматические ошибки. Отвечай без вводных слов и пояснений, только исправленный текст.",
+              isProtected: false),
         // СТИЛЬ И РЕДАКТУРА
         .init(id: "polish", title: "Улучшить стиль", icon: "sparkles",
               system: "Ты — профессиональный редактор. \(commonRules) Перепиши текст, сохранив его смысл, но сделав его более связным, выразительным и лаконичным. Убери заикания, слова-паразиты и повторы. Пиши на русском.",
               isProtected: true),
         .init(id: "fixGrammar", title: "Исправить ошибки", icon: "wrench.and.screwdriver",
-              system: "Ты — корректор. \(commonRules) Исправь все орфографические, пунктуационные и грамматические ошибки в тексте. Не меняй структуру и стиль автора без необходимости. Пиши на русском."),
+              system: "Ты — корректор. \(commonRules) Исправь все орфографические, пунктуационные и грамматические ошибки в тексте. Не меняй структуру и стиль автора без необходимости. Сразу выведи исправленный текст. Пиши на русском."),
         .init(id: "businessTone", title: "Деловой стиль", icon: "briefcase",
               system: "Ты — бизнес-копирайтер. \(commonRules) Перепиши данный текст в строгом деловом и корпоративном стиле. Подходит для рабочей переписки, отчетов и писем клиентам. Пиши на русском."),
         .init(id: "rewrite", title: "Переписать в пост/письмо", icon: "pencil.and.outline",

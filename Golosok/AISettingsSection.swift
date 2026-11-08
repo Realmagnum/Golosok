@@ -6,12 +6,17 @@ import AppKit
 struct AIProviderSection: View {
     @ObservedObject var store = AIProviderStore.shared
     @ObservedObject var account = AccountStore.shared
+    @ObservedObject var neuralDeepOAuth = NeuralDeepOAuthService.shared
+
+    @State private var showingAddProviderSheet = false
+    @State private var renamingPreset: AIProviderPreset? = nil
+    @State private var renameText = ""
 
     private var byoPresets: [AIProviderPreset] {
-        AIProviderPresets.all.filter { !$0.isProxy }
+        store.allPresets.filter { !$0.isProxy }
     }
     private var proxyPreset: AIProviderPreset? {
-        AIProviderPresets.all.first { $0.isProxy }
+        store.allPresets.first { $0.isProxy }
     }
     private var isProxySelected: Bool {
         store.currentPreset?.isProxy == true
@@ -31,12 +36,39 @@ struct AIProviderSection: View {
                     .lineSpacing(2)
                     .fixedSize(horizontal: false, vertical: true)
 
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                // Адаптивное размещение плашек в одну или несколько строк
+                FlowLayout(spacing: 8) {
                     ForEach(byoPresets) { preset in
-                        PresetChip(preset: preset, isSelected: store.providerID == preset.id) {
-                            store.apply(preset)
-                        }
+                        PresetChip(
+                            preset: preset,
+                            isSelected: store.providerID == preset.id,
+                            isFailover: store.isFailoverEnabled && store.failoverProviderID == preset.id,
+                            onSelect: { store.apply(preset) },
+                            onRename: {
+                                renamingPreset = preset
+                                renameText = preset.name
+                            },
+                            onDelete: preset.isCustom ? {
+                                store.deleteCustomPreset(id: preset.id)
+                            } : nil
+                        )
                     }
+
+                    Button(action: { showingAddProviderSheet = true }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "plus")
+                                .font(.system(size: 10, weight: .bold))
+                            Text("Провайдер")
+                                .font(UIStyleFont.body(size: 12, weight: .medium))
+                        }
+                        .foregroundColor(.uiInk)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .background(Color.uiSidebar)
+                        .cornerRadius(12)
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.uiHairline, lineWidth: 1))
+                    }
+                    .buttonStyle(TactileButtonStyle())
                 }
 
                 if let proxy = proxyPreset {
@@ -60,6 +92,84 @@ struct AIProviderSection: View {
                     }
                 } else {
                     AIInputField(title: "Base URL", text: $store.baseURL, placeholder: "https://api.openai.com/v1")
+                    
+                    if store.baseURL.trimmingCharacters(in: .whitespaces).lowercased().hasPrefix("http://") || store.providerID == "ollama" {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Разрешить HTTP (без шифрования)")
+                                    .font(UIStyleFont.body(size: 13, weight: .medium))
+                                    .foregroundColor(.uiInk)
+                                Text("Для локального инференса, домашней сети и Tailscale")
+                                    .font(UIStyleFont.body(size: 11, weight: .regular))
+                                    .foregroundColor(.uiMidGray)
+                            }
+                            Spacer()
+                            Toggle("", isOn: $store.allowInsecureHTTP)
+                                .labelsHidden()
+                                .toggleStyle(SwitchToggleStyle(tint: Color(hex: "#10B981")))
+                        }
+                        .padding(.vertical, 2)
+                    }
+
+                    // Блок OAuth2 входа для Neuraldeep
+                    if store.providerID == "neuraldeep" {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Авторизация Neuraldeep")
+                                    .font(UIStyleFont.body(size: 13, weight: .medium))
+                                    .foregroundColor(.uiInk)
+                                Text(neuralDeepOAuth.authStatusMessage ?? (!store.apiKey.isEmpty ? "Аккаунт привязан, API-ключ сохранён" : "Быстрый вход через браузер с привязкой ключа"))
+                                    .font(UIStyleFont.body(size: 11, weight: .regular))
+                                    .foregroundColor(.uiMidGray)
+                            }
+                            Spacer()
+                            if neuralDeepOAuth.isAuthenticating {
+                                ProgressView().controlSize(.small)
+                                UIOutlineButton(title: "Отмена") {
+                                    neuralDeepOAuth.cancel()
+                                }
+                            } else if !store.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                Button(action: {
+                                    if let url = URL(string: "https://hub.neuraldeep.ru/app/keys") {
+                                        NSWorkspace.shared.open(url)
+                                    }
+                                }) {
+                                    HStack(spacing: 5) {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .font(.system(size: 11, weight: .bold))
+                                        Text("Подключено")
+                                            .font(UIStyleFont.body(size: 13, weight: .semibold))
+                                    }
+                                    .foregroundColor(Color(hex: "#10B981"))
+                                    .padding(.vertical, 7)
+                                    .padding(.horizontal, 14)
+                                    .background(Color(hex: "#10B981").opacity(0.12))
+                                    .cornerRadius(18)
+                                    .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color(hex: "#10B981").opacity(0.35), lineWidth: 1))
+                                }
+                                .buttonStyle(TactileButtonStyle())
+                                .help("Управление ключами и устройствами на hub.neuraldeep.ru")
+                            } else {
+                                UIPrimaryButton(title: "Войти через браузер") {
+                                    neuralDeepOAuth.startBrowserLogin { result in
+                                        switch result {
+                                        case .success(let key):
+                                            store.apiKey = key
+                                            store.testConnection()
+                                        case .failure(let err):
+                                            store.testResult = "Ошибка входа: \(err.localizedDescription)"
+                                            store.testOK = false
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        .padding(12)
+                        .background(Color.uiSidebar.opacity(0.5))
+                        .cornerRadius(12)
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.uiHairline, lineWidth: 1))
+                    }
+
                     AIInputField(title: "API-ключ", text: $store.apiKey, placeholder: "sk-…", isSecure: true)
 
                     if store.providerID == "ollama" {
@@ -67,6 +177,77 @@ struct AIProviderSection: View {
                     } else {
                         AIInputField(title: "Модель", text: $store.model, placeholder: "gpt-4o-mini")
                     }
+
+                    AIInputField(title: "Максимум токенов", text: $store.maxTokensString, placeholder: "4096")
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Уровень ризонинга")
+                            .font(UIStyleFont.body(size: 11, weight: .medium))
+                            .foregroundColor(.uiMidGray)
+                        UIDropdownPicker(
+                            selection: $store.reasoningEffort,
+                            options: AIReasoningEffort.allCases.map {
+                                UIDropdownOption($0.titleKey, value: $0)
+                            },
+                            fullWidth: true
+                        )
+                    }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Бюджет ризонинга")
+                            .font(UIStyleFont.body(size: 11, weight: .medium))
+                            .foregroundColor(.uiMidGray)
+                        UIDropdownPicker(
+                            selection: $store.thinkingBudgetMode,
+                            options: AIThinkingBudgetMode.allCases.map {
+                                UIDropdownOption($0.titleKey, value: $0)
+                            },
+                            fullWidth: true
+                        )
+                        Text("Ограничивает токены на размышления для reasoning-моделей")
+                            .font(UIStyleFont.body(size: 11, weight: .regular))
+                            .foregroundColor(.uiMidGray)
+                    }
+
+                    // MARK: - Отказоустойчивость (Failover)
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "shield.lefthalf.filled")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundColor(Color(hex: "#3B82F6"))
+                                    Text("Резервный провайдер (Failover)")
+                                        .font(UIStyleFont.body(size: 13, weight: .medium))
+                                        .foregroundColor(.uiInk)
+                                }
+                                Text("Автоматически переключиться при сбое сети, таймауте или ошибках 401/5xx")
+                                    .font(UIStyleFont.body(size: 11, weight: .regular))
+                                    .foregroundColor(.uiMidGray)
+                            }
+                            Spacer()
+                            Toggle("", isOn: $store.isFailoverEnabled)
+                                .labelsHidden()
+                                .toggleStyle(SwitchToggleStyle(tint: Color(hex: "#3B82F6")))
+                        }
+
+                        if store.isFailoverEnabled {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Выберите резервного провайдера:")
+                                    .font(UIStyleFont.body(size: 11, weight: .medium))
+                                    .foregroundColor(.uiMidGray)
+                                UIDropdownPicker(
+                                    selection: $store.failoverProviderID,
+                                    options: store.allPresets
+                                        .filter { $0.id != store.providerID }
+                                        .map { UIDropdownOption(LocalizedStringKey($0.name), value: $0.id) },
+                                    fullWidth: true
+                                )
+                            }
+                            .padding(.top, 4)
+                        }
+                    }
+                    .padding(.vertical, 4)
 
                     HStack(spacing: 10) {
                         UIOutlineButton(title: "Проверить") {
@@ -89,10 +270,17 @@ struct AIProviderSection: View {
                 }
             }
         }
+        .sheet(isPresented: $showingAddProviderSheet) {
+            AddCustomAIProviderSheet()
+        }
+        .sheet(item: $renamingPreset) { preset in
+            RenamePresetSheet(preset: preset)
+        }
     }
 
     private func proxyCard(_ proxy: AIProviderPreset) -> some View {
         let isSelected = store.providerID == proxy.id
+        let isFailover = store.isFailoverEnabled && store.failoverProviderID == proxy.id
         let accent = Color(hex: "#10B981")
         return Button(action: {
             if account.isConnected { store.apply(proxy) }
@@ -111,6 +299,33 @@ struct AIProviderSection: View {
                         Text(LocalizedStringKey(proxy.name))
                             .font(UIStyleFont.body(size: 13, weight: .semibold))
                             .foregroundColor(isSelected ? .uiPaper : .uiInk)
+
+                        if isSelected {
+                            HStack(spacing: 3) {
+                                Image(systemName: "star.fill")
+                                    .font(.system(size: 10, weight: .bold))
+                                Text("Основной")
+                                    .font(UIStyleFont.body(size: 9, weight: .bold))
+                            }
+                            .foregroundColor(Color(hex: "#F59E0B"))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color(hex: "#F59E0B").opacity(0.18))
+                            .cornerRadius(6)
+                        } else if isFailover {
+                            HStack(spacing: 3) {
+                                Image(systemName: "shield.lefthalf.filled")
+                                    .font(.system(size: 11, weight: .bold))
+                                Text("Резерв")
+                                    .font(UIStyleFont.body(size: 9, weight: .bold))
+                            }
+                            .foregroundColor(Color(hex: "#3B82F6"))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color(hex: "#3B82F6").opacity(0.14))
+                            .cornerRadius(6)
+                        }
+
                         Text(LocalizedStringKey("Облако"))
                             .font(UIStyleFont.body(size: 9, weight: .bold))
                             .foregroundColor(isSelected ? Color.uiPaper : accent)
@@ -132,6 +347,10 @@ struct AIProviderSection: View {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 16))
                         .foregroundColor(.uiPaper)
+                } else if isFailover {
+                    Image(systemName: "shield.lefthalf.filled")
+                        .font(.system(size: 16))
+                        .foregroundColor(accent)
                 } else {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 11, weight: .semibold))
@@ -197,27 +416,259 @@ struct AIProviderSection: View {
 struct PresetChip: View {
     let preset: AIProviderPreset
     let isSelected: Bool
-    let action: () -> Void
+    var isFailover: Bool = false
+    let onSelect: () -> Void
+    var onRename: (() -> Void)? = nil
+    var onDelete: (() -> Void)? = nil
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                Circle()
-                    .fill(isSelected ? Color.uiPaper : Color.uiMidGray)
-                    .frame(width: 6, height: 6)
-                Text(LocalizedStringKey(preset.name))
-                    .font(UIStyleFont.body(size: 12, weight: .medium))
+        Button(action: onSelect) {
+            HStack(spacing: 8) {
+                if isSelected {
+                    // Яркий статус основного провайдера
+                    HStack(spacing: 4) {
+                        Image(systemName: "star.fill")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(Color(hex: "#F59E0B"))
+                        Text("Основной")
+                            .font(UIStyleFont.body(size: 9, weight: .bold))
+                            .foregroundColor(Color(hex: "#F59E0B"))
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color(hex: "#F59E0B").opacity(0.18))
+                    .cornerRadius(6)
+                } else if isFailover {
+                    // Четкий статус резервного провайдера
+                    HStack(spacing: 4) {
+                        Image(systemName: "shield.lefthalf.filled")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(Color(hex: "#3B82F6"))
+                        Text("Резерв")
+                            .font(UIStyleFont.body(size: 9, weight: .bold))
+                            .foregroundColor(Color(hex: "#3B82F6"))
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color(hex: "#3B82F6").opacity(0.14))
+                    .cornerRadius(6)
+                } else {
+                    Circle()
+                        .fill(Color.uiMidGray.opacity(0.5))
+                        .frame(width: 6, height: 6)
+                }
+
+                Text(preset.name)
+                    .font(UIStyleFont.body(size: 12, weight: .semibold))
                     .foregroundColor(isSelected ? .uiPaper : .uiInk)
                     .lineLimit(1)
-                Spacer(minLength: 0)
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 10)
+            .padding(.vertical, 8)
             .background(isSelected ? Color.uiInk : Color.uiPaper)
             .cornerRadius(12)
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(isSelected ? Color.uiInk : Color.uiHairline, lineWidth: 1))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(isSelected ? Color.uiInk : (isFailover ? Color(hex: "#3B82F6") : Color.uiHairline), lineWidth: isFailover && !isSelected ? 1.5 : 1))
         }
         .buttonStyle(TactileButtonStyle())
+        .contextMenu {
+            Button {
+                onRename?()
+            } label: {
+                Label("Переименовать", systemImage: "pencil")
+            }
+            if let onDelete {
+                Button(role: .destructive) {
+                    onDelete()
+                } label: {
+                    Label("Удалить", systemImage: "trash")
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Адаптивный Flow Layout для переноса плашек по строкам
+
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 8
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxW = proposal.width ?? .infinity
+        var currentX: CGFloat = 0
+        var currentY: CGFloat = 0
+        var lineHeight: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if currentX + size.width > maxW && currentX > 0 {
+                currentX = 0
+                currentY += lineHeight + spacing
+                lineHeight = 0
+            }
+            lineHeight = max(lineHeight, size.height)
+            currentX += size.width + spacing
+        }
+        return CGSize(width: maxW, height: currentY + lineHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var currentX = bounds.minX
+        var currentY = bounds.minY
+        var lineHeight: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if currentX + size.width > bounds.maxX && currentX > bounds.minX {
+                currentX = bounds.minX
+                currentY += lineHeight + spacing
+                lineHeight = 0
+            }
+            subview.place(at: CGPoint(x: currentX, y: currentY), proposal: ProposedViewSize(size))
+            lineHeight = max(lineHeight, size.height)
+            currentX += size.width + spacing
+        }
+    }
+}
+
+// MARK: - Модальное окно добавления кастомного LLM-провайдера
+
+struct AddCustomAIProviderSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var store = AIProviderStore.shared
+
+    @State private var name: String = ""
+    @State private var baseURL: String = "https://api.openai.com/v1"
+    @State private var model: String = ""
+    @State private var apiKey: String = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Новый ИИ-провайдер")
+                .font(UIStyleFont.display(size: 15, weight: .bold))
+                .foregroundColor(.uiInk)
+
+            Text("Добавление произвольного OpenAI-совместимого сервиса (Ollama, vLLM, llama-swap, LiteLLM, OpenRouter и др.).")
+                .font(UIStyleFont.body(size: 11, weight: .regular))
+                .foregroundColor(.uiMidGray)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Название провайдера")
+                    .font(UIStyleFont.body(size: 12, weight: .medium))
+                    .foregroundColor(.uiMidGray)
+                TextField("например: vLLM Server или OpenRouter", text: $name)
+                    .textFieldStyle(.plain)
+                    .padding(8)
+                    .background(Color.uiSidebar)
+                    .cornerRadius(8)
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.uiHairline, lineWidth: 1))
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Base URL")
+                    .font(UIStyleFont.body(size: 12, weight: .medium))
+                    .foregroundColor(.uiMidGray)
+                TextField("https://...", text: $baseURL)
+                    .textFieldStyle(.plain)
+                    .padding(8)
+                    .background(Color.uiSidebar)
+                    .cornerRadius(8)
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.uiHairline, lineWidth: 1))
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Модель")
+                    .font(UIStyleFont.body(size: 12, weight: .medium))
+                    .foregroundColor(.uiMidGray)
+                TextField("например: qwen2.5-coder:32b", text: $model)
+                    .textFieldStyle(.plain)
+                    .padding(8)
+                    .background(Color.uiSidebar)
+                    .cornerRadius(8)
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.uiHairline, lineWidth: 1))
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("API Ключ (опционально)")
+                    .font(UIStyleFont.body(size: 12, weight: .medium))
+                    .foregroundColor(.uiMidGray)
+                SecureField("sk-...", text: $apiKey)
+                    .textFieldStyle(.plain)
+                    .padding(8)
+                    .background(Color.uiSidebar)
+                    .cornerRadius(8)
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.uiHairline, lineWidth: 1))
+            }
+
+            HStack {
+                Spacer()
+                UIOutlineButton(title: "Отмена") { dismiss() }
+                UIPrimaryButton(title: "Добавить") {
+                    store.addCustomPreset(name: name, baseURL: baseURL, model: model, apiKey: apiKey)
+                    dismiss()
+                }
+                .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || baseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+            .padding(.top, 8)
+        }
+        .padding(24)
+        .frame(width: 460)
+        .background(Color.uiPaper)
+    }
+}
+
+// MARK: - Модальное окно переименования инференса
+
+struct RenamePresetSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var store = AIProviderStore.shared
+    let preset: AIProviderPreset
+    @State private var name: String
+
+    init(preset: AIProviderPreset) {
+        self.preset = preset
+        _name = State(initialValue: preset.name)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Переименовать инференс")
+                .font(UIStyleFont.display(size: 15, weight: .bold))
+                .foregroundColor(.uiInk)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Название для отображения")
+                    .font(UIStyleFont.body(size: 12, weight: .medium))
+                    .foregroundColor(.uiMidGray)
+                TextField("Название", text: $name)
+                    .textFieldStyle(.plain)
+                    .padding(8)
+                    .background(Color.uiSidebar)
+                    .cornerRadius(8)
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.uiHairline, lineWidth: 1))
+            }
+
+            HStack {
+                Button("Сбросить") {
+                    store.setPresetName("", for: preset.id)
+                    dismiss()
+                }
+                .font(UIStyleFont.body(size: 12, weight: .regular))
+                .foregroundColor(.uiMidGray)
+                .buttonStyle(PlainButtonStyle())
+
+                Spacer()
+                UIOutlineButton(title: "Отмена") { dismiss() }
+                UIPrimaryButton(title: "Сохранить") {
+                    store.setPresetName(name, for: preset.id)
+                    dismiss()
+                }
+                .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+            .padding(.top, 8)
+        }
+        .padding(24)
+        .frame(width: 380)
+        .background(Color.uiPaper)
     }
 }
 
