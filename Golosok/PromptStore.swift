@@ -5,6 +5,12 @@ final class PromptStore: ObservableObject {
     static let shared = PromptStore()
 
     @Published private(set) var templates: [AIPromptTemplate] = []
+    
+    /// Шаблоны, доступные для пользовательских действий над заметками и выделенным текстом
+    /// (исключает фоновые системные валидаторы вроде techValidator).
+    var actionTemplates: [AIPromptTemplate] {
+        templates.filter { !$0.isInternalSystem }
+    }
 
     private let ioQueue = DispatchQueue(label: "Golosok.PromptStore.io")
     private static let migrationsKey = "promptstore.migrated.v1"

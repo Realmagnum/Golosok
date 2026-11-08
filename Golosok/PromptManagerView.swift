@@ -101,7 +101,20 @@ struct PromptManagerView: View {
                                 .foregroundColor(.uiInk)
                         }
 
-                        if prompt.isProtected {
+                        if prompt.isInternalSystem {
+                            HStack(spacing: 3) {
+                                Image(systemName: "shield.fill")
+                                    .font(.system(size: 8, weight: .bold))
+                                Text("Валидатор IT")
+                                    .font(UIStyleFont.body(size: 9, weight: .bold))
+                            }
+                            .foregroundColor(Color.orange)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1.5)
+                            .background(Color.orange.opacity(0.12))
+                            .cornerRadius(5)
+                            .overlay(RoundedRectangle(cornerRadius: 5).stroke(Color.orange.opacity(0.3), lineWidth: 1))
+                        } else if prompt.isProtected {
                             HStack(spacing: 3) {
                                 Image(systemName: "lock.fill")
                                     .font(.system(size: 8, weight: .bold))

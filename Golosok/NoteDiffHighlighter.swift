@@ -11,27 +11,29 @@ struct NoteDiffHighlighter {
         guard finalLen > 0 else { return ([], []) }
 
         // 1. Поиск диапазонов слов, заменённых IT-словарём
-        let activeRules = TechTermStore.shared.rules.filter { $0.isEnabled }
-        for rule in activeRules {
-            let canon = rule.canonical.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !canon.isEmpty else { continue }
+        // Выполняется ТОЛЬКО если есть сырой текст и он отличается от результата после словаря/итогового текста
+        if let raw = raw, terms != raw {
+            let activeRules = TechTermStore.shared.rules.filter { $0.isEnabled }
+            for rule in activeRules {
+                let canon = rule.canonical.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !canon.isEmpty else { continue }
 
-            let rawHadPattern = rule.patterns.contains { pat in
-                guard let raw = raw else { return false }
-                return raw.range(of: pat, options: .caseInsensitive) != nil
-            }
-            let rawHadCanon = (raw?.range(of: canon, options: .caseInsensitive) != nil)
+                let rawHadPattern = rule.patterns.contains { pat in
+                    raw.range(of: pat, options: .caseInsensitive) != nil
+                }
+                let rawHadCanon = (raw.range(of: canon, options: .caseInsensitive) != nil)
 
-            if rawHadPattern || (!rawHadCanon && raw != nil) || (raw == nil) || (raw == terms) {
-                var search = NSRange(location: 0, length: finalLen)
-                while search.location < finalLen {
-                    let pattern = "(?<![\\p{L}\\p{N}_])" + NSRegularExpression.escapedPattern(for: canon) + "(?![\\p{L}\\p{N}_])"
-                    if let rx = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
-                       let m = rx.firstMatch(in: final, options: [], range: search) {
-                        itRanges.append(m.range)
-                        let next = m.range.location + m.range.length
-                        search = NSRange(location: next, length: finalLen - next)
-                    } else { break }
+                if rawHadPattern || !rawHadCanon {
+                    var search = NSRange(location: 0, length: finalLen)
+                    while search.location < finalLen {
+                        let pattern = "(?<![\\p{L}\\p{N}_])" + NSRegularExpression.escapedPattern(for: canon) + "(?![\\p{L}\\p{N}_])"
+                        if let rx = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
+                           let m = rx.firstMatch(in: final, options: [], range: search) {
+                            itRanges.append(m.range)
+                            let next = m.range.location + m.range.length
+                            search = NSRange(location: next, length: finalLen - next)
+                        } else { break }
+                    }
                 }
             }
         }

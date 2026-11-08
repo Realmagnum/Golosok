@@ -604,7 +604,17 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         let item = history[idx]
         let current = item.text.trimmingCharacters(in: .whitespacesAndNewlines)
         let newText = current.isEmpty ? text : current + "\n\n----------------\n\n" + text
-        history[idx] = TranscriptionItem(id: item.id, date: item.date, text: newText, duration: item.duration, speedup: item.speedup, isUnread: item.isUnread)
+        history[idx] = TranscriptionItem(
+            id: item.id,
+            date: item.date,
+            text: newText,
+            duration: item.duration,
+            speedup: item.speedup,
+            isUnread: item.isUnread,
+            isAITransform: item.isAITransform,
+            rawText: item.rawText,
+            termsText: item.termsText
+        )
     }
 
     func replaceNoteText(id: UUID, text: String, rawText: String? = nil, termsText: String? = nil) {
@@ -629,7 +639,17 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         let nsText = item.text as NSString
         guard range.location != NSNotFound, range.location + range.length <= nsText.length else { return }
         let result = nsText.replacingCharacters(in: range, with: newText)
-        history[idx] = TranscriptionItem(id: item.id, date: item.date, text: result, duration: item.duration, speedup: item.speedup, isUnread: item.isUnread)
+        history[idx] = TranscriptionItem(
+            id: item.id,
+            date: item.date,
+            text: result,
+            duration: item.duration,
+            speedup: item.speedup,
+            isUnread: item.isUnread,
+            isAITransform: item.isAITransform,
+            rawText: item.rawText,
+            termsText: item.termsText
+        )
     }
 
     @discardableResult
@@ -1604,13 +1624,40 @@ func checkUpdates(force: Bool = false) {
         }
         isLoadingHistory = true
         defer { isLoadingHistory = false }
+
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+        let audioDir = appSupport?.appendingPathComponent("Golosok/Audio", isDirectory: true)
+
         self.history = items.map { item in
-            if !item.text.contains("\n\n") && item.text.count > 120 {
-                needsSave = true
-                let pretty = TextFormatter.formatIntoParagraphs(item.text)
-                return TranscriptionItem(id: item.id, date: item.date, text: pretty, duration: item.duration, speedup: item.speedup, isUnread: item.isUnread)
+            var updated = item
+
+            // Восстановление сырого текста ASR из сохраненных segments.json, если он был утерян
+            if updated.rawText == nil, let audioDir {
+                let segURL = audioDir.appendingPathComponent("\(item.id.uuidString).segments.json")
+                if let segData = try? Data(contentsOf: segURL),
+                   let payload = try? JSONDecoder().decode(TimingFilePayload.self, from: segData),
+                   !payload.words.isEmpty {
+                    let recoveredRaw = payload.words.map(\.text).joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !recoveredRaw.isEmpty {
+                        updated.rawText = recoveredRaw
+                        needsSave = true
+                    }
+                }
             }
-            return item
+
+            // Восстановление текста после словаря IT-терминов, если есть сырой текст
+            if updated.termsText == nil, let raw = updated.rawText {
+                let terms = TechTermStore.shared.applyReplacements(to: raw)
+                updated.termsText = terms
+                needsSave = true
+            }
+
+            // Форматирование абзацев при необходимости (с сохранением всех полей)
+            if !updated.text.contains("\n\n") && updated.text.count > 120 {
+                needsSave = true
+                updated.text = TextFormatter.formatIntoParagraphs(updated.text)
+            }
+            return updated
         }
         if needsSave { saveHistory() }
     }

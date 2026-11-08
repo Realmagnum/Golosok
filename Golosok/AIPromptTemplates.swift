@@ -9,6 +9,12 @@ struct AIPromptTemplate: Identifiable, Codable, Equatable {
     var isCustom: Bool          // false = built-in (локализуется по ключу), true = пользовательский (как есть)
     var createdAt: Date
 
+    /// Служебные промпты (например, валидатор словаря кандидатов), которые не должны предлагаться
+    /// как действие в меню трансформации текста заметок или выделения.
+    var isInternalSystem: Bool {
+        id == "techValidator"
+    }
+
     init(id: String, title: String, icon: String, system: String,
          isProtected: Bool = false, isCustom: Bool = false, createdAt: Date = Date()) {
         self.id = id

@@ -401,7 +401,7 @@ struct SettingsView: View {
                                     .font(UIStyleFont.body(size: 13, weight: .medium))
                                     .foregroundColor(.uiInk)
                                 Spacer()
-                                UIDropdownPicker(selection: $audioCapture.autoAIProcessTemplateID, options: promptStore.templates.map { t in
+                                UIDropdownPicker(selection: $audioCapture.autoAIProcessTemplateID, options: promptStore.actionTemplates.map { t in
                                     let isBuiltin = AIPromptDefaults.builtinIDs.contains(t.id)
                                     let text = (!t.isCustom || isBuiltin) ? String(localized: String.LocalizationValue(t.title)) : t.title
                                     return UIDropdownOption(text, icon: t.icon, value: t.id)

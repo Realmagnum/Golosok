@@ -611,6 +611,12 @@ struct SyncedTextView: NSViewRepresentable {
 
 struct StagePickerMenuButton: View {
     @Binding var textStageMode: DisplayedTextStage
+    var note: TranscriptionItem? = nil
+
+    private var hasChanges: Bool {
+        guard let note = note, let raw = note.rawText else { return false }
+        return raw != note.text || (note.termsText != nil && note.termsText != note.text)
+    }
 
     var body: some View {
         UIDropdownMenu(items: [
@@ -641,7 +647,7 @@ struct StagePickerMenuButton: View {
             .overlay(RoundedRectangle(cornerRadius: 18).stroke(textStageMode == .final ? Color.uiHairline : Color.orange.opacity(0.4), lineWidth: 1))
         }
         .fixedSize(horizontal: true, vertical: false)
-        .help("Просмотр исходного сырого текста ASR и промежуточных этапов обработки")
+        .help(hasChanges ? "Просмотр исходного сырого текста ASR и промежуточных этапов обработки" : "Сырой текст ASR и результат обработки идентичны")
     }
 }
 
@@ -654,7 +660,7 @@ struct NoteAIMenuButton: View {
 
     var body: some View {
         UIDropdownMenu(items: {
-            var arr: [UIDropdownItem] = promptStore.templates.map { t in
+            var arr: [UIDropdownItem] = promptStore.actionTemplates.map { t in
                 let isBuiltin = AIPromptDefaults.builtinIDs.contains(t.id)
                 let label: Text = (!t.isCustom || isBuiltin) ? Text(LocalizedStringKey(t.title)) : Text(t.title)
                 return .action(text: label, icon: t.icon) {
@@ -1055,7 +1061,7 @@ struct ContentView: View {
                             let buttonsRow: () -> AnyView = {
                                 AnyView(
                                     HStack(spacing: 8) {
-                                        StagePickerMenuButton(textStageMode: $textStageMode)
+                                        StagePickerMenuButton(textStageMode: $textStageMode, note: selected)
                                         CopyFeedbackButton(textToCopy: displayedText(for: selected))
                                         EditToggleButton(isEditing: isEditing) {
                                             if isEditing { commitEditing(for: selected) } else { beginEditing(selected) }
@@ -1167,12 +1173,20 @@ struct ContentView: View {
                                     .transition(.move(edge: .top).combined(with: .opacity))
                             }
                             if textStageMode != .final {
+                                let activeStageText = displayedText(for: selected)
+                                let isIdentical = (activeStageText == selected.text)
                                 HStack(spacing: 8) {
                                     Image(systemName: "eye.fill")
-                                        .foregroundColor(.orange)
-                                    Text(textStageMode == .raw ? "Просмотр: Сырой текст голосовой модели (до обработки словарём и ИИ)" : "Просмотр: Текст после словаря IT-терминов (до обработки ИИ-шаблоном)")
+                                        .foregroundColor(isIdentical ? .uiMidGray : .orange)
+                                    Text(isIdentical
+                                         ? (textStageMode == .raw
+                                            ? "Просмотр: Сырой текст голосовой модели (совпадает с итоговым, замен не было)"
+                                            : "Просмотр: Текст после словаря (совпадает с итоговым, замен не было)")
+                                         : (textStageMode == .raw
+                                            ? "Просмотр: Сырой текст голосовой модели (до обработки словарём и ИИ)"
+                                            : "Просмотр: Текст после словаря IT-терминов (до обработки ИИ-шаблоном)"))
                                         .font(UIStyleFont.body(size: 12, weight: .medium))
-                                        .foregroundColor(.uiInk)
+                                        .foregroundColor(isIdentical ? .uiMidGray : .uiInk)
                                     Spacer()
                                     Button("Вернуться к итоговому") {
                                         withAnimation(.easeInOut(duration: 0.15)) {
@@ -1185,9 +1199,9 @@ struct ContentView: View {
                                 }
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 8)
-                                .background(Color.orange.opacity(0.12))
+                                .background(isIdentical ? Color.uiCanvas : Color.orange.opacity(0.12))
                                 .cornerRadius(10)
-                                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.orange.opacity(0.25), lineWidth: 1))
+                                .overlay(RoundedRectangle(cornerRadius: 10).stroke(isIdentical ? Color.uiHairline : Color.orange.opacity(0.25), lineWidth: 1))
                                 .padding(.bottom, 4)
                             }
 
@@ -1567,7 +1581,7 @@ struct ContentView: View {
 
         AISelectionToolbarPresenter.shared.update(
             anchorScreenRect: rect,
-            templates: promptStore.templates,
+            templates: promptStore.actionTemplates,
             onPick: { tpl in openSelectionAI(with: tpl) },
             onClose: { currentSelection = nil }
         )

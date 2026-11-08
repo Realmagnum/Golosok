@@ -148,7 +148,7 @@ final class AISelectionManager {
     // MARK: - Показ палитры промптов
 
     private func presentPromptPalette(for text: String, targetApp: NSRunningApplication) {
-        let templates = PromptStore.shared.templates
+        let templates = PromptStore.shared.actionTemplates
         guard !templates.isEmpty else {
             AudioCapture.shared.cancelAIProcessing(warning: String(localized: "Список промптов пуст"))
             return
