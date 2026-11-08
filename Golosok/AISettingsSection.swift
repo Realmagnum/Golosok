@@ -42,6 +42,7 @@ struct AIProviderSection: View {
                         PresetChip(
                             preset: preset,
                             isSelected: store.providerID == preset.id,
+                            isFailover: store.isFailoverEnabled && store.failoverProviderID == preset.id,
                             onSelect: { store.apply(preset) },
                             onRename: {
                                 renamingPreset = preset
@@ -208,6 +209,46 @@ struct AIProviderSection: View {
                             .foregroundColor(.uiMidGray)
                     }
 
+                    // MARK: - Отказоустойчивость (Failover)
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "shield.lefthalf.filled")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundColor(Color(hex: "#3B82F6"))
+                                    Text("Резервный провайдер (Failover)")
+                                        .font(UIStyleFont.body(size: 13, weight: .medium))
+                                        .foregroundColor(.uiInk)
+                                }
+                                Text("Автоматически переключиться при сбое сети, таймауте или ошибках 401/5xx")
+                                    .font(UIStyleFont.body(size: 11, weight: .regular))
+                                    .foregroundColor(.uiMidGray)
+                            }
+                            Spacer()
+                            Toggle("", isOn: $store.isFailoverEnabled)
+                                .labelsHidden()
+                                .toggleStyle(SwitchToggleStyle(tint: Color(hex: "#3B82F6")))
+                        }
+
+                        if store.isFailoverEnabled {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Выберите резервного провайдера:")
+                                    .font(UIStyleFont.body(size: 11, weight: .medium))
+                                    .foregroundColor(.uiMidGray)
+                                UIDropdownPicker(
+                                    selection: $store.failoverProviderID,
+                                    options: store.allPresets
+                                        .filter { $0.id != store.providerID }
+                                        .map { UIDropdownOption(LocalizedStringKey($0.name), value: $0.id) },
+                                    fullWidth: true
+                                )
+                            }
+                            .padding(.top, 4)
+                        }
+                    }
+                    .padding(.vertical, 4)
+
                     HStack(spacing: 10) {
                         UIOutlineButton(title: "Проверить") {
                             store.testConnection()
@@ -239,6 +280,7 @@ struct AIProviderSection: View {
 
     private func proxyCard(_ proxy: AIProviderPreset) -> some View {
         let isSelected = store.providerID == proxy.id
+        let isFailover = store.isFailoverEnabled && store.failoverProviderID == proxy.id
         let accent = Color(hex: "#10B981")
         return Button(action: {
             if account.isConnected { store.apply(proxy) }
@@ -257,6 +299,19 @@ struct AIProviderSection: View {
                         Text(LocalizedStringKey(proxy.name))
                             .font(UIStyleFont.body(size: 13, weight: .semibold))
                             .foregroundColor(isSelected ? .uiPaper : .uiInk)
+
+                        if isSelected {
+                            Image(systemName: "star.fill")
+                                .font(.system(size: 9))
+                                .foregroundColor(Color(hex: "#F59E0B"))
+                                .help("Основной провайдер")
+                        } else if isFailover {
+                            Image(systemName: "shield.fill")
+                                .font(.system(size: 9))
+                                .foregroundColor(Color(hex: "#3B82F6"))
+                                .help("Резервный провайдер (Failover)")
+                        }
+
                         Text(LocalizedStringKey("Облако"))
                             .font(UIStyleFont.body(size: 9, weight: .bold))
                             .foregroundColor(isSelected ? Color.uiPaper : accent)
@@ -278,6 +333,10 @@ struct AIProviderSection: View {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 16))
                         .foregroundColor(.uiPaper)
+                } else if isFailover {
+                    Image(systemName: "shield.lefthalf.filled")
+                        .font(.system(size: 16))
+                        .foregroundColor(accent)
                 } else {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 11, weight: .semibold))
@@ -343,6 +402,7 @@ struct AIProviderSection: View {
 struct PresetChip: View {
     let preset: AIProviderPreset
     let isSelected: Bool
+    var isFailover: Bool = false
     let onSelect: () -> Void
     var onRename: (() -> Void)? = nil
     var onDelete: (() -> Void)? = nil
@@ -350,9 +410,20 @@ struct PresetChip: View {
     var body: some View {
         Button(action: onSelect) {
             HStack(spacing: 6) {
-                Circle()
-                    .fill(isSelected ? Color.uiPaper : Color.uiMidGray)
-                    .frame(width: 6, height: 6)
+                if isSelected {
+                    Image(systemName: "star.fill")
+                        .font(.system(size: 8))
+                        .foregroundColor(Color(hex: "#F59E0B"))
+                } else if isFailover {
+                    Image(systemName: "shield.fill")
+                        .font(.system(size: 8))
+                        .foregroundColor(Color(hex: "#3B82F6"))
+                } else {
+                    Circle()
+                        .fill(Color.uiMidGray)
+                        .frame(width: 6, height: 6)
+                }
+
                 Text(preset.name)
                     .font(UIStyleFont.body(size: 12, weight: .medium))
                     .foregroundColor(isSelected ? .uiPaper : .uiInk)
@@ -362,7 +433,7 @@ struct PresetChip: View {
             .padding(.vertical, 8)
             .background(isSelected ? Color.uiInk : Color.uiPaper)
             .cornerRadius(12)
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(isSelected ? Color.uiInk : Color.uiHairline, lineWidth: 1))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(isSelected ? Color.uiInk : (isFailover ? Color(hex: "#3B82F6") : Color.uiHairline), lineWidth: isFailover && !isSelected ? 1.5 : 1))
         }
         .buttonStyle(TactileButtonStyle())
         .contextMenu {

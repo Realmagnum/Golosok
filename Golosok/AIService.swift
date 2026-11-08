@@ -153,6 +153,8 @@ final class AIProviderStore: ObservableObject {
     static let shared = AIProviderStore()
 
     @Published var providerID: String { didSet { Self.defaults.set(providerID, forKey: "ai.providerID") } }
+    @Published var isFailoverEnabled: Bool { didSet { Self.defaults.set(isFailoverEnabled, forKey: "ai.failover.enabled") } }
+    @Published var failoverProviderID: String { didSet { Self.defaults.set(failoverProviderID, forKey: "ai.failover.providerID") } }
     @Published var baseURL: String {
         didSet {
             Self.defaults.set(baseURL, forKey: "ai.baseURL")
@@ -236,6 +238,8 @@ final class AIProviderStore: ObservableObject {
             ?? AIProviderPresets.builtin[0]
         let currentID = savedID.isEmpty ? initialPreset.id : savedID
         self.providerID = currentID
+        self.isFailoverEnabled = Self.defaults.object(forKey: "ai.failover.enabled") as? Bool ?? false
+        self.failoverProviderID = Self.defaults.string(forKey: "ai.failover.providerID") ?? "ollama"
         self.baseURL = Self.defaults.string(forKey: "ai.provider.\(currentID).baseURL")
             ?? Self.defaults.string(forKey: "ai.baseURL")
             ?? initialPreset.baseURL
@@ -339,12 +343,39 @@ final class AIProviderStore: ObservableObject {
         allPresets.first { $0.id == providerID }
     }
 
+    var failoverPreset: AIProviderPreset? {
+        allPresets.first { $0.id == failoverProviderID }
+    }
+
     var config: AIProviderConfig {
         let isProxy = currentPreset?.isProxy ?? false
         return AIProviderConfig(
             baseURL: baseURL,
             apiKey: isProxy ? AccountStore.shared.token : apiKey,
             model: model,
+            isProxy: isProxy,
+            reasoningEffort: reasoningEffort,
+            thinkingBudgetMode: thinkingBudgetMode,
+            maxTokens: maxTokens
+        )
+    }
+
+    /// Конфигурация для резервного провайдера (Failover)
+    var failoverConfig: AIProviderConfig? {
+        guard isFailoverEnabled, !failoverProviderID.isEmpty, failoverProviderID != providerID else { return nil }
+        guard let preset = failoverPreset else { return nil }
+
+        let bURL = Self.defaults.string(forKey: "ai.provider.\(preset.id).baseURL") ?? preset.baseURL
+        let mdl = Self.defaults.string(forKey: "ai.provider.\(preset.id).model") ?? preset.defaultModel
+        let isProxy = preset.isProxy
+        let key = isProxy ? AccountStore.shared.token : (KeyStore.get("ai.provider.\(preset.id).apiKey") ?? "")
+
+        guard isProxy || (!bURL.isEmpty && !mdl.isEmpty) else { return nil }
+
+        return AIProviderConfig(
+            baseURL: bURL,
+            apiKey: key,
+            model: mdl,
             isProxy: isProxy,
             reasoningEffort: reasoningEffort,
             thinkingBudgetMode: thinkingBudgetMode,
@@ -603,7 +634,7 @@ final class AIService {
         }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.timeoutInterval = 180
+        request.timeoutInterval = 30
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if !config.apiKey.isEmpty {
             request.setValue("Bearer \(config.apiKey)", forHTTPHeaderField: "Authorization")
@@ -646,6 +677,23 @@ final class AIService {
                     )
                     return
                 }
+
+                // Проверяем автоматический Failover на резервного провайдера
+                if let backup = AIProviderStore.shared.failoverConfig, backup.baseURL != config.baseURL || backup.model != config.model {
+                    if self?.shouldTriggerFailover(for: error) == true {
+                        AppLogger.shared.warn("AI", "Основной провайдер недоступен, автоматическое переключение на резервный (Failover)", details: "\(backup.baseURL) / \(backup.model)")
+                        _ = self?.chatStream(
+                            messages: messages,
+                            using: backup,
+                            promptLength: promptLength,
+                            isFallback: false,
+                            onChunk: onChunk,
+                            completion: completion
+                        )
+                        return
+                    }
+                }
+
                 completion(.failure(error))
             case .success(let val):
                 completion(.success(val))
@@ -667,7 +715,7 @@ final class AIService {
         }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.timeoutInterval = 180
+        request.timeoutInterval = 25
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if !config.apiKey.isEmpty {
             request.setValue("Bearer \(config.apiKey)", forHTTPHeaderField: "Authorization")
@@ -695,7 +743,15 @@ final class AIService {
                     AppLogger.shared.info("AI", "Запрос к модели отменён пользователем")
                     return
                 }
-                completion(.failure(.network(error.localizedDescription)))
+                let aiError = AIError.network(error.localizedDescription)
+                if let backup = AIProviderStore.shared.failoverConfig, backup.baseURL != config.baseURL || backup.model != config.model {
+                    if self?.shouldTriggerFailover(for: aiError) == true {
+                        AppLogger.shared.warn("AI", "Основной провайдер недоступен (тайм-аут/сеть), переключение на резервный (Failover)", details: "\(backup.baseURL) / \(backup.model)")
+                        _ = self?.chat(messages: messages, using: backup, promptLength: promptLength, completion: completion)
+                        return
+                    }
+                }
+                completion(.failure(aiError))
                 return
             }
             guard let http = response as? HTTPURLResponse else {
@@ -719,7 +775,18 @@ final class AIService {
                     )
                     return
                 }
-                completion(.failure(.http(http.statusCode, errDetail)))
+
+                let httpErr = AIError.http(http.statusCode, errDetail)
+                // Failover при 401, 403, 404, 429, 5xx
+                if let backup = AIProviderStore.shared.failoverConfig, backup.baseURL != config.baseURL || backup.model != config.model {
+                    if self?.shouldTriggerFailover(for: httpErr) == true {
+                        AppLogger.shared.warn("AI", "Сбой основного провайдера (\(http.statusCode)), переключение на резервный (Failover)", details: "\(backup.baseURL) / \(backup.model)")
+                        _ = self?.chat(messages: messages, using: backup, promptLength: promptLength, completion: completion)
+                        return
+                    }
+                }
+
+                completion(.failure(httpErr))
                 return
             }
             guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
@@ -738,6 +805,19 @@ final class AIService {
         }
         task.resume()
         return task
+    }
+
+    private func shouldTriggerFailover(for error: AIError) -> Bool {
+        switch error {
+        case .network:
+            return true
+        case .http(let code, _):
+            return code == 401 || code == 403 || code == 404 || code == 429 || code >= 500
+        case .emptyResponse, .invalidURL, .notConfigured:
+            return true
+        case .parse:
+            return false
+        }
     }
 
     func test(using config: AIProviderConfig, completion: @escaping (Result<Void, AIError>) -> Void) {
