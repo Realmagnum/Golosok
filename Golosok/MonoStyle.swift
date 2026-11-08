@@ -49,6 +49,22 @@ extension NSColor {
             return NSColor.systemYellow.withAlphaComponent(0.70)
         }
     }
+
+    static let itTermHighlight: NSColor = NSColor(name: nil) { appearance in
+        if appearance.name == .darkAqua {
+            return NSColor(hex: "#10B981").withAlphaComponent(0.28)
+        } else {
+            return NSColor(hex: "#10B981").withAlphaComponent(0.20)
+        }
+    }
+
+    static let aiReplacedHighlight: NSColor = NSColor(name: nil) { appearance in
+        if appearance.name == .darkAqua {
+            return NSColor(hex: "#8B5CF6").withAlphaComponent(0.32)
+        } else {
+            return NSColor(hex: "#8B5CF6").withAlphaComponent(0.22)
+        }
+    }
 }
 
 // MARK: - Hex & Dynamic Initializers for SwiftUI Color

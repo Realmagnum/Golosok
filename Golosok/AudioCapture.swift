@@ -23,11 +23,13 @@ struct UpdateInfo: Codable {
 struct TranscriptionItem: Identifiable, Codable, Hashable {
     var id = UUID()
     let date: String
-    let text: String
+    var text: String
     let duration: String
     var speedup: Double?
     var isUnread: Bool? = false
     var isAITransform: Bool? = false
+    var rawText: String? = nil
+    var termsText: String? = nil
     
     var formattedSpeedup: String {
         if let s = speedup, s > 0 { return String(format: "x%.0f", s) }
@@ -550,7 +552,17 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
                 formatter.dateFormat = "dd.MM.yyyy, HH:mm"
                 let dateStr = formatter.string(from: Date())
                 
-                let newItem = TranscriptionItem(id: UUID(), date: dateStr, text: prettyFormattedText, duration: durationFormatted, speedup: calculatedSpeedup, isUnread: true)
+                let newItem = TranscriptionItem(
+                    id: UUID(),
+                    date: dateStr,
+                    text: prettyFormattedText,
+                    duration: durationFormatted,
+                    speedup: calculatedSpeedup,
+                    isUnread: true,
+                    isAITransform: false,
+                    rawText: rawText,
+                    termsText: termsCorrectedText
+                )
                 
                 self.saveAudioForNote(id: newItem.id, sourceURL: sourceURL)
                 if !accumulatedWords.isEmpty {
@@ -594,10 +606,20 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         history[idx] = TranscriptionItem(id: item.id, date: item.date, text: newText, duration: item.duration, speedup: item.speedup, isUnread: item.isUnread)
     }
 
-    func replaceNoteText(id: UUID, text: String) {
+    func replaceNoteText(id: UUID, text: String, rawText: String? = nil, termsText: String? = nil) {
         guard let idx = history.firstIndex(where: { $0.id == id }) else { return }
         let item = history[idx]
-        history[idx] = TranscriptionItem(id: item.id, date: item.date, text: text, duration: item.duration, speedup: item.speedup, isUnread: item.isUnread)
+        history[idx] = TranscriptionItem(
+            id: item.id,
+            date: item.date,
+            text: text,
+            duration: item.duration,
+            speedup: item.speedup,
+            isUnread: item.isUnread,
+            isAITransform: item.isAITransform,
+            rawText: rawText ?? item.rawText,
+            termsText: termsText ?? item.termsText
+        )
     }
 
     func replaceRangeInNote(id: UUID, range: NSRange, newText: String) {
@@ -914,7 +936,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
                     OverlayPanelManager.shared.showWarning(message: String(localized: "Речь не распознана"))
                     completion?(false)
                 } else {
-                    self.replaceNoteText(id: id, text: prettyFormattedText)
+                    self.replaceNoteText(id: id, text: prettyFormattedText, rawText: rawText, termsText: termsCorrectedText)
                     if !accumulatedWords.isEmpty {
                         self.saveTimingsForNote(id: id, words: accumulatedWords, duration: realAudioSecs)
                     }

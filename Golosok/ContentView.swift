@@ -57,6 +57,8 @@ enum TranscriptSearch {
 
 struct NativeTextView: NSViewRepresentable {
     let text: String
+    var itRanges: [NSRange] = []
+    var aiRanges: [NSRange] = []
     var searchRanges: [NSRange] = []
     var currentMatchPosition: Int = -1
     var onSelectionChange: ((NSRange, CGRect?) -> Void)? = nil
@@ -77,16 +79,29 @@ struct NativeTextView: NSViewRepresentable {
         let storage = textView.textStorage
 
         let textChanged = textView.string != text
-        if textChanged {
-            textView.string = text
-            textView.textColor = NSColor(Color.uiInk)
+        let diffChanged = coordinator.lastITRanges != itRanges || coordinator.lastAIRanges != aiRanges
+        if textChanged || diffChanged {
+            coordinator.lastITRanges = itRanges
+            coordinator.lastAIRanges = aiRanges
+            let attributed = NSMutableAttributedString(string: text, attributes: [
+                .font: NSFont.systemFont(ofSize: 15, weight: .regular),
+                .foregroundColor: NSColor(Color.uiInk)
+            ])
+            let nsLen = (text as NSString).length
+            for range in itRanges where range.location != NSNotFound && range.location + range.length <= nsLen {
+                attributed.addAttribute(.backgroundColor, value: NSColor.itTermHighlight, range: range)
+            }
+            for range in aiRanges where range.location != NSNotFound && range.location + range.length <= nsLen {
+                attributed.addAttribute(.backgroundColor, value: NSColor.aiReplacedHighlight, range: range)
+            }
+            storage?.setAttributedString(attributed)
             coordinator.appliedSearchRanges.removeAll()
             coordinator.lastSearchRanges = []
             coordinator.lastMatchPosition = -1
         }
         coordinator.onSelectionChange = onSelectionChange
 
-        let needsReapply = textChanged
+        let needsReapply = textChanged || diffChanged
             || coordinator.lastSearchRanges != searchRanges
             || coordinator.lastMatchPosition != currentMatchPosition
         guard needsReapply else { return }
@@ -118,6 +133,8 @@ struct NativeTextView: NSViewRepresentable {
         var appliedSearchRanges: [NSRange] = []
         var lastSearchRanges: [NSRange] = []
         var lastMatchPosition: Int = -1
+        var lastITRanges: [NSRange] = []
+        var lastAIRanges: [NSRange] = []
 
         func textViewDidChangeSelection(_ notification: Notification) {
             guard let tv = notification.object as? NSTextView else { return }
@@ -154,6 +171,8 @@ struct SyncedPlayerView: View {
     let words: [TimedWord]
     let audioDuration: Double
     let itemID: UUID
+    var itRanges: [NSRange] = []
+    var aiRanges: [NSRange] = []
     @ObservedObject var audioCapture = AudioCapture.shared
     var searchMatchWordIndices: [Int] = []
     var currentMatchPosition: Int = -1
@@ -206,7 +225,7 @@ struct SyncedPlayerView: View {
                     .foregroundColor(.uiMidGray)
             }
 
-            SyncedTextView(text: text, words: words, currentWordIndex: currentWordIndex,
+            SyncedTextView(text: text, words: words, itRanges: itRanges, aiRanges: aiRanges, currentWordIndex: currentWordIndex,
                            searchMatchWordIndices: searchMatchWordIndices,
                            currentMatchPosition: currentMatchPosition,
                            onSelectionChange: onSelectionChange) { time in
@@ -224,6 +243,8 @@ struct SyncedPlayerView: View {
 struct SyncedTextView: NSViewRepresentable {
     let text: String
     let words: [TimedWord]
+    var itRanges: [NSRange] = []
+    var aiRanges: [NSRange] = []
     let currentWordIndex: Int?
     var searchMatchWordIndices: [Int] = []
     var currentMatchPosition: Int = -1
@@ -257,9 +278,14 @@ struct SyncedTextView: NSViewRepresentable {
         let coordinator = context.coordinator
         coordinator.onSeek = onSeek
         coordinator.onSelectionChange = onSelectionChange
+        coordinator.itRanges = itRanges
+        coordinator.aiRanges = aiRanges
 
-        let textChanged = coordinator.cachedText != text || coordinator.cachedWords != words
+        let diffChanged = coordinator.lastITRanges != itRanges || coordinator.lastAIRanges != aiRanges
+        let textChanged = coordinator.cachedText != text || coordinator.cachedWords != words || diffChanged
         if textChanged {
+            coordinator.lastITRanges = itRanges
+            coordinator.lastAIRanges = aiRanges
             coordinator.cachedText = text
             coordinator.cachedWords = words
             coordinator.cachedRanges = coordinator.wordRanges(text: text, words: words)
@@ -275,6 +301,13 @@ struct SyncedTextView: NSViewRepresentable {
                 let url = URL(string: "golosok://seek/\(words[i].start)")
                 attributed.addAttribute(.link, value: url as Any, range: range)
                 attributed.addAttribute(.underlineStyle, value: 0, range: range)
+            }
+            let nsLen = (text as NSString).length
+            for range in itRanges where range.location != NSNotFound && range.location + range.length <= nsLen {
+                attributed.addAttribute(.backgroundColor, value: NSColor.itTermHighlight, range: range)
+            }
+            for range in aiRanges where range.location != NSNotFound && range.location + range.length <= nsLen {
+                attributed.addAttribute(.backgroundColor, value: NSColor.aiReplacedHighlight, range: range)
             }
             textView.textStorage?.setAttributedString(attributed)
         }
@@ -334,6 +367,10 @@ struct SyncedTextView: NSViewRepresentable {
         var searchMatchPositionMap: [Int: Int] = [:]
         var currentMatchPosition: Int = -1
         var yellowedWordIndices: Set<Int> = []
+        var itRanges: [NSRange] = []
+        var aiRanges: [NSRange] = []
+        var lastITRanges: [NSRange] = []
+        var lastAIRanges: [NSRange] = []
 
         init(onSeek: @escaping (Double) -> Void) { self.onSeek = onSeek }
 
@@ -354,6 +391,16 @@ struct SyncedTextView: NSViewRepresentable {
             return true
         }
 
+        func baseColor(for range: NSRange) -> NSColor? {
+            if itRanges.contains(where: { NSIntersectionRange($0, range).length > 0 }) {
+                return NSColor.itTermHighlight
+            }
+            if aiRanges.contains(where: { NSIntersectionRange($0, range).length > 0 }) {
+                return NSColor.aiReplacedHighlight
+            }
+            return nil
+        }
+
         func applyHighlight(in textView: NSTextView, currentWordIndex: Int?) {
             let storage = textView.textStorage
             if let prev = highlightedIndex, prev != currentWordIndex, prev < cachedRanges.count {
@@ -364,6 +411,8 @@ struct SyncedTextView: NSViewRepresentable {
                         let color: NSColor = (searchMatchPositionMap[prev] == currentMatchPosition) ? .searchCurrentMatch : .searchMatch
                         storage?.addAttribute(.backgroundColor, value: color, range: range)
                         yellowedWordIndices.insert(prev)
+                    } else if let base = baseColor(for: range) {
+                        storage?.addAttribute(.backgroundColor, value: base, range: range)
                     }
                 }
             }
@@ -502,6 +551,101 @@ struct SyncedTextView: NSViewRepresentable {
     }
 }
 
+struct StagePickerMenuButton: View {
+    @Binding var textStageMode: DisplayedTextStage
+
+    var body: some View {
+        UIDropdownMenu(items: [
+            .action(textStageMode == .final ? "✓ Итоговый текст" : "  Итоговый текст") {
+                withAnimation(.easeInOut(duration: 0.15)) { textStageMode = .final }
+            },
+            .action(textStageMode == .terms ? "✓ После IT-словаря" : "  После IT-словаря") {
+                withAnimation(.easeInOut(duration: 0.15)) { textStageMode = .terms }
+            },
+            .action(textStageMode == .raw ? "✓ Сырой ASR (до обработки)" : "  Сырой ASR (до обработки)") {
+                withAnimation(.easeInOut(duration: 0.15)) { textStageMode = .raw }
+            }
+        ]) {
+            HStack(spacing: 4) {
+                Image(systemName: "clock.arrow.circlepath")
+                    .font(.system(size: 11, weight: .medium))
+                Text(textStageMode == .final ? LocalizedStringKey("Этапы") : LocalizedStringKey(textStageMode.rawValue))
+                    .font(UIStyleFont.body(size: 13, weight: .medium))
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundColor(.uiMidGray)
+            }
+            .foregroundColor(textStageMode == .final ? .uiInk : .orange)
+            .padding(.vertical, 8)
+            .padding(.horizontal, 12)
+            .background(textStageMode == .final ? Color.uiPaper : Color.orange.opacity(0.12))
+            .cornerRadius(18)
+            .overlay(RoundedRectangle(cornerRadius: 18).stroke(textStageMode == .final ? Color.uiHairline : Color.orange.opacity(0.4), lineWidth: 1))
+        }
+        .fixedSize(horizontal: true, vertical: false)
+        .help("Просмотр исходного сырого текста ASR и промежуточных этапов обработки")
+    }
+}
+
+struct NoteAIMenuButton: View {
+    let note: TranscriptionItem
+    @ObservedObject var promptStore = PromptStore.shared
+    @Binding var aiRequest: AIActionRequest?
+    @Binding var showCreatePrompt: Bool
+    @Binding var showPromptManager: Bool
+
+    var body: some View {
+        UIDropdownMenu(items: {
+            var arr: [UIDropdownItem] = promptStore.templates.map { t in
+                let isBuiltin = AIPromptDefaults.builtinIDs.contains(t.id)
+                let label: Text = (!t.isCustom || isBuiltin) ? Text(LocalizedStringKey(t.title)) : Text(t.title)
+                return .action(text: label, icon: t.icon) {
+                    aiRequest = AIActionRequest(template: t, noteID: note.id, noteText: note.text)
+                }
+            }
+            arr.append(.divider)
+            arr.append(.action(LocalizedStringKey("Новый промпт…"), icon: "plus") { showCreatePrompt = true })
+            arr.append(.action(LocalizedStringKey("Управлять промптами…"), icon: "slider.horizontal.3") { showPromptManager = true })
+            return arr
+        }()) {
+            HStack(spacing: 4) {
+                Image(systemName: "sparkles").font(.system(size: 11, weight: .medium))
+                Text(LocalizedStringKey("ИИ")).font(UIStyleFont.body(size: 13, weight: .medium))
+                Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold)).foregroundColor(.uiMidGray)
+            }
+            .lineLimit(1).foregroundColor(.uiInk).padding(.vertical, 8).padding(.horizontal, 14).background(Color.uiPaper).cornerRadius(18).overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.uiHairline, lineWidth: 1))
+        }
+        .fixedSize(horizontal: true, vertical: false)
+    }
+}
+
+struct NoteExportMenuButton: View {
+    let note: TranscriptionItem
+    @ObservedObject var audioCapture = AudioCapture.shared
+
+    var body: some View {
+        UIDropdownMenu(items: [
+            .action("Markdown (.md)") { audioCapture.exportTranscription(note, format: "md") },
+            .action("Текст (.txt)") { audioCapture.exportTranscription(note, format: "txt") },
+            .action("Excel (.csv)") { audioCapture.exportTranscription(note, format: "csv") },
+            .action("JSON (.json)") { audioCapture.exportTranscription(note, format: "json") },
+            .divider,
+            .action("Субтитры (.srt)") { audioCapture.exportTranscription(note, format: "srt") },
+            .action("Субтитры (.vtt)") { audioCapture.exportTranscription(note, format: "vtt") }
+        ]) {
+            HStack(spacing: 4) { Image(systemName: "square.and.arrow.up").font(.system(size: 11, weight: .medium)); Text(LocalizedStringKey("Экспорт")).font(UIStyleFont.body(size: 13, weight: .medium)); Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold)).foregroundColor(.uiMidGray) }
+            .lineLimit(1).foregroundColor(.uiInk).padding(.vertical, 8).padding(.horizontal, 14).background(Color.uiPaper).cornerRadius(18).overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.uiHairline, lineWidth: 1))
+        }
+        .fixedSize(horizontal: true, vertical: false)
+    }
+}
+
+enum DisplayedTextStage: String, CaseIterable {
+    case final = "Итоговый"
+    case terms = "После словаря"
+    case raw = "Сырой ASR"
+}
+
 struct ContentView: View {
     @ObservedObject var audioCapture = AudioCapture.shared
     @ObservedObject var permissions = PermissionManager.shared
@@ -519,6 +663,7 @@ struct ContentView: View {
     @State private var itemToDelete: UUID?
     @State private var showingDeleteAlert = false
     @State private var selectedTimings: (words: [TimedWord], duration: Double)?
+    @State private var textStageMode: DisplayedTextStage = .final
     
     @State private var showAboutSheet = false
     @State private var isFileDropTargeted = false
@@ -542,6 +687,21 @@ struct ContentView: View {
     
     private var displayedHistory: [TranscriptionItem] {
         searchText.isEmpty ? audioCapture.history : filteredResults
+    }
+
+    private func displayedText(for item: TranscriptionItem) -> String {
+        switch textStageMode {
+        case .raw:
+            return item.rawText ?? item.text
+        case .terms:
+            return item.termsText ?? item.text
+        case .final:
+            return item.text
+        }
+    }
+
+    private func diffRanges(for item: TranscriptionItem) -> (itRanges: [NSRange], aiRanges: [NSRange]) {
+        NoteDiffHighlighter.highlightRanges(raw: item.rawText, terms: item.termsText, final: item.text)
     }
     
     var body: some View {
@@ -828,7 +988,8 @@ struct ContentView: View {
                             let buttonsRow: () -> AnyView = {
                                 AnyView(
                                     HStack(spacing: 8) {
-                                        CopyFeedbackButton(textToCopy: selected.text)
+                                        StagePickerMenuButton(textStageMode: $textStageMode)
+                                        CopyFeedbackButton(textToCopy: displayedText(for: selected))
                                         EditToggleButton(isEditing: isEditing) {
                                             if isEditing { commitEditing(for: selected) } else { beginEditing(selected) }
                                         }
@@ -841,38 +1002,14 @@ struct ContentView: View {
                                                 }
                                             }
                                         }
-                                        UIDropdownMenu(items: {
-                                            var arr: [UIDropdownItem] = promptStore.templates.map { t in
-                                                let isBuiltin = AIPromptDefaults.builtinIDs.contains(t.id)
-                                                let label: Text = (!t.isCustom || isBuiltin) ? Text(LocalizedStringKey(t.title)) : Text(t.title)
-                                                return .action(text: label, icon: t.icon) {
-                                                    aiRequest = AIActionRequest(template: t, noteID: selected.id, noteText: selected.text)
-                                                }
-                                            }
-                                            arr.append(.divider)
-                                            arr.append(.action(LocalizedStringKey("Новый промпт…"), icon: "plus") { showCreatePrompt = true })
-                                            arr.append(.action(LocalizedStringKey("Управлять промптами…"), icon: "slider.horizontal.3") { showPromptManager = true })
-                                            return arr
-                                        }()) {
-                                            HStack(spacing: 4) {
-                                                Image(systemName: "sparkles").font(.system(size: 11, weight: .medium))
-                                                Text(LocalizedStringKey("ИИ")).font(UIStyleFont.body(size: 13, weight: .medium))
-                                                Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold)).foregroundColor(.uiMidGray)
-                                            }
-                                            .lineLimit(1).foregroundColor(.uiInk).padding(.vertical, 8).padding(.horizontal, 14).background(Color.uiPaper).cornerRadius(18).overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.uiHairline, lineWidth: 1))
-                                        }.fixedSize(horizontal: true, vertical: false)
-                                        UIDropdownMenu(items: [
-                                            .action("Markdown (.md)") { audioCapture.exportTranscription(selected, format: "md") },
-                                            .action("Текст (.txt)") { audioCapture.exportTranscription(selected, format: "txt") },
-                                            .action("Excel (.csv)") { audioCapture.exportTranscription(selected, format: "csv") },
-                                            .action("JSON (.json)") { audioCapture.exportTranscription(selected, format: "json") },
-                                            .divider,
-                                            .action("Субтитры (.srt)") { audioCapture.exportTranscription(selected, format: "srt") },
-                                            .action("Субтитры (.vtt)") { audioCapture.exportTranscription(selected, format: "vtt") }
-                                        ]) {
-                                            HStack(spacing: 4) { Image(systemName: "square.and.arrow.up").font(.system(size: 11, weight: .medium)); Text(LocalizedStringKey("Экспорт")).font(UIStyleFont.body(size: 13, weight: .medium)); Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold)).foregroundColor(.uiMidGray) }
-                                            .lineLimit(1).foregroundColor(.uiInk).padding(.vertical, 8).padding(.horizontal, 14).background(Color.uiPaper).cornerRadius(18).overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.uiHairline, lineWidth: 1))
-                                        }.fixedSize(horizontal: true, vertical: false)
+                                        NoteAIMenuButton(
+                                            note: selected,
+                                            promptStore: promptStore,
+                                            aiRequest: $aiRequest,
+                                            showCreatePrompt: $showCreatePrompt,
+                                            showPromptManager: $showPromptManager
+                                        )
+                                        NoteExportMenuButton(note: selected, audioCapture: audioCapture)
                                         UIDestructiveButton(title: "Удалить") { itemToDelete = selected.id; showingDeleteAlert = true }
                                     }.fixedSize(horizontal: true, vertical: false).layoutPriority(1)
                                 )
@@ -892,6 +1029,7 @@ struct ContentView: View {
                                 }
                             }
                             
+                            let diff = diffRanges(for: selected)
                             HStack(spacing: 8) {
                                 if selected.isAITransform == true || selected.duration == "AI" {
                                     MetadataPill(icon: "sparkles", text: String(localized: "History.AI"), color: Color(hex: "#A855F7"))
@@ -902,6 +1040,30 @@ struct ContentView: View {
                                 MetadataPill(icon: "text.alignleft", text: "\(selected.text.count) " + String(localized: "зн"), color: Color(hex: "#10B981"))
                                 let readMin = max(1, selected.text.count / 900)
                                 MetadataPill(icon: "book.fill", text: "~\(readMin) " + String(localized: "мин чтения"), color: Color.purple)
+
+                                if !diff.itRanges.isEmpty {
+                                    HStack(spacing: 4) {
+                                        Circle().fill(Color(hex: "#10B981")).frame(width: 6, height: 6)
+                                        Text("IT-термин")
+                                            .font(.system(size: 10, weight: .semibold, design: .rounded))
+                                            .foregroundColor(Color(hex: "#10B981"))
+                                    }
+                                    .padding(.horizontal, 6).padding(.vertical, 3)
+                                    .background(Color(hex: "#10B981").opacity(0.12))
+                                    .cornerRadius(6)
+                                }
+                                if !diff.aiRanges.isEmpty {
+                                    HStack(spacing: 4) {
+                                        Circle().fill(Color(hex: "#8B5CF6")).frame(width: 6, height: 6)
+                                        Text("ИИ-правка")
+                                            .font(.system(size: 10, weight: .semibold, design: .rounded))
+                                            .foregroundColor(Color(hex: "#8B5CF6"))
+                                    }
+                                    .padding(.horizontal, 6).padding(.vertical, 3)
+                                    .background(Color(hex: "#8B5CF6").opacity(0.12))
+                                    .cornerRadius(6)
+                                }
+
                                 if selectedTimings == nil && audioCapture.hasAudioFile(for: selected) {
                                     Button(action: { audioCapture.toggleAudioPlayback(for: selected) }) {
                                         HStack(spacing: 4) { Image(systemName: audioCapture.playingItemId == selected.id ? "pause.fill" : "play.fill").font(.system(size: 9, weight: .bold)); Text(audioCapture.playingItemId == selected.id ? LocalizedStringKey("Пауза") : LocalizedStringKey("Слушать голос")).font(.system(size: 10, weight: .bold, design: .rounded)) }
@@ -937,6 +1099,34 @@ struct ContentView: View {
                                 transcriptSearchBar
                                     .transition(.move(edge: .top).combined(with: .opacity))
                             }
+                            if textStageMode != .final {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "eye.fill")
+                                        .foregroundColor(.orange)
+                                    Text(textStageMode == .raw ? "Просмотр: Сырой текст голосовой модели (до обработки словарём и ИИ)" : "Просмотр: Текст после словаря IT-терминов (до обработки ИИ-шаблоном)")
+                                        .font(UIStyleFont.body(size: 12, weight: .medium))
+                                        .foregroundColor(.uiInk)
+                                    Spacer()
+                                    Button("Вернуться к итоговому") {
+                                        withAnimation(.easeInOut(duration: 0.15)) {
+                                            textStageMode = .final
+                                        }
+                                    }
+                                    .font(UIStyleFont.body(size: 11, weight: .semibold))
+                                    .buttonStyle(PlainButtonStyle())
+                                    .foregroundColor(.blue)
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(Color.orange.opacity(0.12))
+                                .cornerRadius(10)
+                                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.orange.opacity(0.25), lineWidth: 1))
+                                .padding(.bottom, 4)
+                            }
+
+                            let activeText = displayedText(for: selected)
+                            let effectiveDiff = (textStageMode == .final) ? diff : (itRanges: [NSRange](), aiRanges: [NSRange]())
+
                             if isEditing {
                                 ZStack(alignment: .topLeading) {
                                     EditableTextView(text: $editableText) { _ in
@@ -951,15 +1141,19 @@ struct ContentView: View {
                                             .allowsHitTesting(false)
                                     }
                                 }
-                            } else if let timings = selectedTimings {
-                                SyncedPlayerView(text: selected.text, words: timings.words, audioDuration: timings.duration, itemID: selected.id,
+                            } else if let timings = selectedTimings, textStageMode == .final {
+                                SyncedPlayerView(text: activeText, words: timings.words, audioDuration: timings.duration, itemID: selected.id,
+                                                 itRanges: effectiveDiff.itRanges,
+                                                 aiRanges: effectiveDiff.aiRanges,
                                                  searchMatchWordIndices: cachedSyncedMatchIndices,
                                                  currentMatchPosition: cachedSyncedMatchIndices.isEmpty ? -1 : currentMatchPosition,
                                                  onSelectionChange: { range, rect in
                                     handleNoteSelectionChange(range: range, screenRect: rect)
                                 })
                             } else {
-                                NativeTextView(text: selected.text,
+                                NativeTextView(text: activeText,
+                                               itRanges: effectiveDiff.itRanges,
+                                               aiRanges: effectiveDiff.aiRanges,
                                                searchRanges: cachedNativeMatchRanges,
                                                currentMatchPosition: cachedNativeMatchRanges.isEmpty ? -1 : currentMatchPosition,
                                                onSelectionChange: { range, rect in
@@ -1046,6 +1240,7 @@ struct ContentView: View {
         }
         .onAppear { loadSelectedTimings() }
         .onChange(of: selectedItemId) { newId in
+            textStageMode = .final
             audioCapture.stopSyncedPlayback()
             if isEditing, let prev = editingItemID, prev != newId {
                 flushPendingEdits()
