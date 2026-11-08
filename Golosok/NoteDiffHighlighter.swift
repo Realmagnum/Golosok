@@ -22,7 +22,7 @@ struct NoteDiffHighlighter {
             }
             let rawHadCanon = (raw?.range(of: canon, options: .caseInsensitive) != nil)
 
-            if rawHadPattern || (!rawHadCanon && raw != nil) || (raw == nil && terms == nil) {
+            if rawHadPattern || (!rawHadCanon && raw != nil) || (raw == nil) || (raw == terms) {
                 var search = NSRange(location: 0, length: finalLen)
                 while search.location < finalLen {
                     let pattern = "(?<![\\p{L}\\p{N}_])" + NSRegularExpression.escapedPattern(for: canon) + "(?![\\p{L}\\p{N}_])"

@@ -299,7 +299,7 @@ final class AIProviderStore: ObservableObject {
             hint: cleanURL,
             baseURL: cleanURL,
             defaultModel: cleanModel.isEmpty ? "default" : cleanModel,
-            needsKey: true,
+            needsKey: false,
             isProxy: false,
             isCustom: true
         )
@@ -358,7 +358,6 @@ final class AIProviderStore: ObservableObject {
         }
         return !baseURL.trimmingCharacters(in: .whitespaces).isEmpty
             && !model.trimmingCharacters(in: .whitespaces).isEmpty
-            && (apiKey.isEmpty ? !(currentPreset?.needsKey ?? true) : true)
     }
 
     func apply(_ preset: AIProviderPreset) {
@@ -410,22 +409,33 @@ final class AIProviderStore: ObservableObject {
     }
 
     func testConnection() {
-        guard isConfigured else {
-            testOK = false
-            testResult = currentPreset?.isProxy == true ? String(localized: "Подключите аккаунт") : String(localized: "Заполните baseURL и модель")
+        if currentPreset?.isProxy == true {
+            testOK = AccountStore.shared.isConnected
+            testResult = AccountStore.shared.isConnected ? String(localized: "Сервер доступен через аккаунт") : String(localized: "Подключите аккаунт")
             return
         }
-        let trimmedURL = baseURL.trimmingCharacters(in: .whitespaces).lowercased()
+
+        let cleanURL = baseURL.trimmingCharacters(in: .whitespaces)
+        let cleanModel = model.trimmingCharacters(in: .whitespaces)
+
+        if cleanURL.isEmpty {
+            testOK = false
+            testResult = String(localized: "Заполните Base URL")
+            return
+        }
+        if cleanModel.isEmpty {
+            testOK = false
+            testResult = String(localized: "Укажите модель")
+            return
+        }
+
+        let trimmedURL = cleanURL.lowercased()
         if trimmedURL.hasPrefix("http://") && !allowInsecureHTTP {
             testOK = false
             testResult = String(localized: "HTTP запрещён. Включите разрешение HTTP или используйте HTTPS.")
             return
         }
-        if currentPreset?.isProxy == true {
-            testOK = true
-            testResult = String(localized: "Сервер доступен через аккаунт")
-            return
-        }
+
         isTesting = true
         testResult = nil
         testOK = false
@@ -742,6 +752,49 @@ final class AIService {
             request.setValue("Bearer \(config.apiKey)", forHTTPHeaderField: "Authorization")
         }
         addProxyHeaders(&request, config: config)
+        session.dataTask(with: request) { [weak self] data, response, error in
+            if let error {
+                completion(.failure(.network(error.localizedDescription)))
+                return
+            }
+            guard let http = response as? HTTPURLResponse else {
+                completion(.failure(.network("нет HTTP-ответа")))
+                return
+            }
+            if (200..<300).contains(http.statusCode) {
+                completion(.success(()))
+            } else if http.statusCode == 404 {
+                // Если сервер/прокси (например, CPAMP / Chained Model Proxy) не реализует GET /models,
+                // проверяем доступность через легковесный POST /chat/completions с 1 токеном
+                self?.testViaChatCompletions(using: config, completion: completion)
+            } else {
+                let message = (data.flatMap { Self.extractError(from: $0) }) ?? "HTTP \(http.statusCode)"
+                completion(.failure(.http(http.statusCode, message)))
+            }
+        }.resume()
+    }
+
+    private func testViaChatCompletions(using config: AIProviderConfig, completion: @escaping (Result<Void, AIError>) -> Void) {
+        guard let url = url(config.baseURL, path: "chat/completions") else {
+            completion(.failure(.invalidURL))
+            return
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 15
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if !config.apiKey.isEmpty {
+            request.setValue("Bearer \(config.apiKey)", forHTTPHeaderField: "Authorization")
+        }
+        addProxyHeaders(&request, config: config)
+
+        let testPayload: [String: Any] = [
+            "model": config.model.isEmpty ? "default" : config.model,
+            "messages": [["role": "user", "content": "ping"]],
+            "max_tokens": 1
+        ]
+        request.httpBody = try? JSONSerialization.data(withJSONObject: testPayload)
+
         session.dataTask(with: request) { data, response, error in
             if let error {
                 completion(.failure(.network(error.localizedDescription)))

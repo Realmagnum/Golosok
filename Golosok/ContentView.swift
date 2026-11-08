@@ -526,6 +526,7 @@ struct SyncedTextView: NSViewRepresentable {
                     else if back[a][b] == 2 { a += 1 }
                     else { b += 1 }
                 }
+                Self.interpolateUnalignedGaps(ranges: &ranges, tokens: tokens, n: n, m: m)
                 return ranges
             }
 
@@ -546,7 +547,64 @@ struct SyncedTextView: NSViewRepresentable {
                     pos += (word as NSString).length
                 }
             }
+            Self.interpolateUnalignedGaps(ranges: &ranges, tokens: tokens, n: n, m: m)
             return ranges
+        }
+
+        private static func interpolateUnalignedGaps(ranges: inout [NSRange], tokens: [NSRange], n: Int, m: Int) {
+            guard !tokens.isEmpty else { return }
+            var lastB = -1
+            var lastA = -1
+            for a in 0..<n {
+                if ranges[a].location != NSNotFound {
+                    if let b = tokens.firstIndex(where: { $0.location == ranges[a].location }) {
+                        let gapAStart = lastA + 1
+                        let gapAEnd = a - 1
+                        let gapBStart = lastB + 1
+                        let gapBEnd = b - 1
+                        if gapAStart <= gapAEnd {
+                            if gapBStart <= gapBEnd {
+                                for curA in gapAStart...gapAEnd {
+                                    let ratio = Double(curA - gapAStart) / Double(max(1, gapAEnd - gapAStart + 1))
+                                    let targetB = gapBStart + Int(ratio * Double(gapBEnd - gapBStart + 1))
+                                    let clampedB = min(max(targetB, gapBStart), gapBEnd)
+                                    ranges[curA] = tokens[clampedB]
+                                }
+                            } else {
+                                let fallbackB = b < tokens.count ? b : max(0, lastB)
+                                if fallbackB >= 0 && fallbackB < tokens.count {
+                                    for curA in gapAStart...gapAEnd {
+                                        ranges[curA] = tokens[fallbackB]
+                                    }
+                                }
+                            }
+                        }
+                        lastB = b
+                        lastA = a
+                    }
+                }
+            }
+            if lastA < n - 1 {
+                let gapAStart = lastA + 1
+                let gapAEnd = n - 1
+                let gapBStart = lastB + 1
+                let gapBEnd = tokens.count - 1
+                for curA in gapAStart...gapAEnd {
+                    if gapBStart <= gapBEnd {
+                        let ratio = Double(curA - gapAStart) / Double(max(1, gapAEnd - gapAStart + 1))
+                        let targetB = gapBStart + Int(ratio * Double(gapBEnd - gapBStart + 1))
+                        let clampedB = min(max(targetB, gapBStart), gapBEnd)
+                        ranges[curA] = tokens[clampedB]
+                    } else if lastB >= 0 && lastB < tokens.count {
+                        ranges[curA] = tokens[lastB]
+                    }
+                }
+            }
+            for a in 0..<n {
+                if ranges[a].location == NSNotFound, let firstValid = ranges.first(where: { $0.location != NSNotFound }) {
+                    ranges[a] = firstValid
+                }
+            }
         }
     }
 }
@@ -701,7 +759,16 @@ struct ContentView: View {
     }
 
     private func diffRanges(for item: TranscriptionItem) -> (itRanges: [NSRange], aiRanges: [NSRange]) {
-        NoteDiffHighlighter.highlightRanges(raw: item.rawText, terms: item.termsText, final: item.text)
+        switch textStageMode {
+        case .raw:
+            return ([], [])
+        case .terms:
+            let termsText = item.termsText ?? item.text
+            let res = NoteDiffHighlighter.highlightRanges(raw: item.rawText, terms: nil, final: termsText)
+            return (itRanges: res.itRanges, aiRanges: [])
+        case .final:
+            return NoteDiffHighlighter.highlightRanges(raw: item.rawText, terms: item.termsText, final: item.text)
+        }
     }
     
     var body: some View {
@@ -1125,7 +1192,7 @@ struct ContentView: View {
                             }
 
                             let activeText = displayedText(for: selected)
-                            let effectiveDiff = (textStageMode == .final) ? diff : (itRanges: [NSRange](), aiRanges: [NSRange]())
+                            let effectiveDiff = diff
 
                             if isEditing {
                                 ZStack(alignment: .topLeading) {
@@ -1141,7 +1208,7 @@ struct ContentView: View {
                                             .allowsHitTesting(false)
                                     }
                                 }
-                            } else if let timings = selectedTimings, textStageMode == .final {
+                            } else if let timings = selectedTimings, textStageMode == .final || textStageMode == .terms {
                                 SyncedPlayerView(text: activeText, words: timings.words, audioDuration: timings.duration, itemID: selected.id,
                                                  itRanges: effectiveDiff.itRanges,
                                                  aiRanges: effectiveDiff.aiRanges,

@@ -128,51 +128,26 @@ struct AIProviderSection: View {
                                     neuralDeepOAuth.cancel()
                                 }
                             } else if !store.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                HStack(spacing: 8) {
-                                    Button(action: {
-                                        if let url = URL(string: "https://hub.neuraldeep.ru/app/keys") {
-                                            NSWorkspace.shared.open(url)
-                                        }
-                                    }) {
-                                        HStack(spacing: 5) {
-                                            Image(systemName: "checkmark.circle.fill")
-                                                .font(.system(size: 11, weight: .bold))
-                                            Text("Подключено")
-                                                .font(UIStyleFont.body(size: 13, weight: .semibold))
-                                        }
-                                        .foregroundColor(Color(hex: "#10B981"))
-                                        .padding(.vertical, 7)
-                                        .padding(.horizontal, 14)
-                                        .background(Color(hex: "#10B981").opacity(0.12))
-                                        .cornerRadius(18)
-                                        .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color(hex: "#10B981").opacity(0.35), lineWidth: 1))
+                                Button(action: {
+                                    if let url = URL(string: "https://hub.neuraldeep.ru/app/keys") {
+                                        NSWorkspace.shared.open(url)
                                     }
-                                    .buttonStyle(TactileButtonStyle())
-                                    .help("Управление ключами и устройствами на hub.neuraldeep.ru")
-
-                                    Button(action: {
-                                        neuralDeepOAuth.startBrowserLogin { result in
-                                            switch result {
-                                            case .success(let key):
-                                                store.apiKey = key
-                                                store.testConnection()
-                                            case .failure(let err):
-                                                store.testResult = "Ошибка входа: \(err.localizedDescription)"
-                                                store.testOK = false
-                                            }
-                                        }
-                                    }) {
-                                        Image(systemName: "arrow.triangle.2.circlepath")
-                                            .font(.system(size: 11))
-                                            .foregroundColor(.uiMidGray)
-                                            .frame(width: 28, height: 28)
-                                            .background(Color.uiSidebar)
-                                            .clipShape(Circle())
-                                            .overlay(Circle().stroke(Color.uiHairline, lineWidth: 1))
+                                }) {
+                                    HStack(spacing: 5) {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .font(.system(size: 11, weight: .bold))
+                                        Text("Подключено")
+                                            .font(UIStyleFont.body(size: 13, weight: .semibold))
                                     }
-                                    .buttonStyle(TactileButtonStyle())
-                                    .help("Сменить аккаунт / перелогиниться")
+                                    .foregroundColor(Color(hex: "#10B981"))
+                                    .padding(.vertical, 7)
+                                    .padding(.horizontal, 14)
+                                    .background(Color(hex: "#10B981").opacity(0.12))
+                                    .cornerRadius(18)
+                                    .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color(hex: "#10B981").opacity(0.35), lineWidth: 1))
                                 }
+                                .buttonStyle(TactileButtonStyle())
+                                .help("Управление ключами и устройствами на hub.neuraldeep.ru")
                             } else {
                                 UIPrimaryButton(title: "Войти через браузер") {
                                     neuralDeepOAuth.startBrowserLogin { result in
