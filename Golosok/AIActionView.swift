@@ -217,10 +217,14 @@ struct AIResultSheet: View {
         .onDisappear(perform: cancelGeneration)
     }
 
+    private var isReasoningActive: Bool {
+        AIProviderStore.shared.reasoningEffort != .off && !reasoningText.isEmpty
+    }
+
     private var streamingBar: some View {
         HStack(spacing: 10) {
             ProgressView().controlSize(.small)
-            Text(resultText.isEmpty ? String(localized: "Размышления модели…") : String(localized: "Печатает ответ…"))
+            Text(isReasoningActive ? String(localized: "Размышления модели…") : (resultText.isEmpty ? String(localized: "Генерация ответа…") : String(localized: "Печатает ответ…")))
                 .font(UIStyleFont.body(size: 12, weight: .medium))
                 .foregroundColor(.uiMidGray)
             Spacer()
@@ -252,7 +256,7 @@ struct AIResultSheet: View {
 
         case .streaming:
             if resultText.isEmpty {
-                if !reasoningText.isEmpty {
+                if isReasoningActive {
                     liveReasoningView
                 } else {
                     VStack(spacing: 16) {
@@ -378,7 +382,7 @@ struct AIResultSheet: View {
     @ViewBuilder
     private var outputView: some View {
         VStack(alignment: .leading, spacing: 10) {
-            if !reasoningText.isEmpty {
+            if isReasoningActive {
                 reasoningCollapsibleBar
             }
 

@@ -38,9 +38,9 @@ enum AIProviderPresets {
         AIProviderPreset(
             id: "deepseek",
             name: "DeepSeek",
-            hint: "deepseek-chat",
-            baseURL: "https://api.deepseek.com/v1",
-            defaultModel: "deepseek-chat",
+            hint: "deepseek-flash, deepseek-v4-pro",
+            baseURL: "https://api.deepseek.com",
+            defaultModel: "deepseek-flash",
             needsKey: true
         ),
         AIProviderPreset(
@@ -247,6 +247,11 @@ final class AIProviderStore: ObservableObject {
             Self.defaults.set(resolvedModel, forKey: "ai.provider.neuraldeep.model")
             Self.defaults.set(resolvedModel, forKey: "ai.model")
         }
+        if currentID == "deepseek" && (resolvedModel == "deepseek-chat" || resolvedModel == "deepseek-reasoner" || resolvedModel.isEmpty) {
+            resolvedModel = "deepseek-flash"
+            Self.defaults.set(resolvedModel, forKey: "ai.provider.deepseek.model")
+            Self.defaults.set(resolvedModel, forKey: "ai.model")
+        }
         self.model = resolvedModel
         self.apiKey = KeyStore.get("ai.provider.\(currentID).apiKey")
             ?? KeyStore.get("ai.apiKey")
@@ -371,6 +376,9 @@ final class AIProviderStore: ObservableObject {
         if preset.id == "neuraldeep" && savedModel == "neuraldeep/qwen3.8-27b" {
             savedModel = "qwen3.6-fp8-noreason"
         }
+        if preset.id == "deepseek" && (savedModel == "deepseek-chat" || savedModel == "deepseek-reasoner") {
+            savedModel = "deepseek-flash"
+        }
         model = savedModel
         apiKey = KeyStore.get("ai.provider.\(preset.id).apiKey") ?? (preset.needsKey ? "" : "")
 
@@ -453,21 +461,121 @@ final class AIService {
         session = URLSession(configuration: cfg)
     }
 
-    private struct ChatThinking: Codable {
-        let type: String?
-        let budget_tokens: Int?
-    }
+    private func buildUniversalPayload(
+        messages: [AIChatMessage],
+        config: AIProviderConfig,
+        promptLength: Int?,
+        stream: Bool,
+        isFallback: Bool
+    ) -> (data: Data?, debugDesc: String) {
+        let userMaxTokens = config.maxTokens > 0 ? config.maxTokens : 4096
+        let chars = promptLength ?? messages.reduce(0) { $0 + $1.content.count }
+        let approxPromptTokens = max(64, chars / 4)
+        let minTokensForOutput = approxPromptTokens + 512
 
-    private struct ChatRequest: Codable {
-        let model: String?
-        let messages: [AIChatMessage]
-        let temperature: Double
-        let max_tokens: Int?
-        let max_completion_tokens: Int?
-        let reasoning_effort: String?
-        let thinking: ChatThinking?
-        let max_thinking_tokens: Int?
-        let stream: Bool?
+        var payload: [String: Any] = [:]
+        if !config.isProxy && !config.model.isEmpty {
+            payload["model"] = config.model
+        }
+
+        let encodedMessages: [[String: String]] = messages.map { ["role": $0.role, "content": $0.content] }
+        payload["messages"] = encodedMessages
+        if stream {
+            payload["stream"] = true
+        }
+
+        let modelLower = config.model.lowercased()
+        let baseURLLower = config.baseURL.lowercased()
+        let isOpenAI = baseURLLower.contains("api.openai.com")
+        let isOpenAI_O_Series = isOpenAI && (modelLower.hasPrefix("o1") || modelLower.hasPrefix("o3") || modelLower.contains("-o1-") || modelLower.contains("-o3-"))
+        let isDeepSeek = baseURLLower.contains("deepseek.com") || modelLower.contains("deepseek")
+        let isNeuralDeep = baseURLLower.contains("neuraldeep")
+        let isQwen = isNeuralDeep || modelLower.contains("qwen")
+        let isOpenRouter = baseURLLower.contains("openrouter.ai")
+
+        // 1. Fallback режим: чистый совместимый стандарт OpenAI
+        if isFallback {
+            payload["temperature"] = 0.3
+            payload["max_tokens"] = userMaxTokens
+            let data = try? JSONSerialization.data(withJSONObject: payload)
+            return (data, "fallback=true, max_tokens=\(userMaxTokens)")
+        }
+
+        // 2. Расчет лимита токенов
+        var maxTokensParam = userMaxTokens
+        let isReasoningOff = (config.reasoningEffort == .off && config.thinkingBudgetMode == .off)
+
+        if !isReasoningOff {
+            switch config.thinkingBudgetMode {
+            case .off:
+                maxTokensParam = max(userMaxTokens, minTokensForOutput)
+            case .fixed1024:
+                let budget = 1024
+                maxTokensParam = max(userMaxTokens, budget + minTokensForOutput)
+            case .proportional:
+                let budget = max(256, approxPromptTokens * 2)
+                maxTokensParam = max(userMaxTokens, budget + minTokensForOutput)
+            }
+        }
+
+        if isOpenAI_O_Series {
+            payload["max_completion_tokens"] = maxTokensParam
+        } else {
+            payload["max_tokens"] = maxTokensParam
+        }
+
+        // 3. Температура
+        if !isOpenAI_O_Series {
+            if config.thinkingBudgetMode != .off && baseURLLower.contains("anthropic") {
+                payload["temperature"] = 1.0
+            } else {
+                payload["temperature"] = 0.3
+            }
+        }
+
+        // 4. Управление ризонингом
+        if isReasoningOff {
+            // Гарантированное выключение
+            if isQwen {
+                payload["chat_template_kwargs"] = ["enable_thinking": false]
+            }
+            if isDeepSeek {
+                payload["thinking"] = ["type": "disabled"]
+            }
+            if isOpenRouter {
+                payload["reasoning"] = ["max_tokens": 0]
+            }
+        } else {
+            // Включение ризонинга по контрактам провайдеров
+            if isOpenAI_O_Series {
+                payload["reasoning_effort"] = config.reasoningEffort.rawValue
+            } else if isDeepSeek {
+                payload["thinking"] = ["type": "enabled"]
+                let effortStr = (config.reasoningEffort == .low) ? "low" : "high"
+                payload["reasoning_effort"] = effortStr
+            } else if isQwen {
+                payload["chat_template_kwargs"] = ["enable_thinking": true]
+            } else if isOpenRouter {
+                payload["reasoning"] = ["effort": config.reasoningEffort.rawValue]
+            }
+
+            if config.thinkingBudgetMode != .off {
+                let budget: Int
+                switch config.thinkingBudgetMode {
+                case .off: budget = 0
+                case .fixed1024: budget = 1024
+                case .proportional: budget = max(256, approxPromptTokens * 2)
+                }
+                if budget > 0 {
+                    payload["thinking"] = ["type": "enabled", "budget_tokens": budget]
+                    payload["max_thinking_tokens"] = budget
+                }
+            }
+        }
+
+        let data = try? JSONSerialization.data(withJSONObject: payload)
+        let desc = "reasoningOff=\(isReasoningOff), max_tokens=\(maxTokensParam)"
+        return (data, desc)
     }
 
     @discardableResult
@@ -475,6 +583,7 @@ final class AIService {
         messages: [AIChatMessage],
         using config: AIProviderConfig,
         promptLength: Int? = nil,
+        isFallback: Bool = false,
         onChunk: @escaping (String, String?) -> Void,
         completion: @escaping (Result<String, AIError>) -> Void
     ) -> URLSessionDataTask? {
@@ -491,59 +600,57 @@ final class AIService {
         }
         addProxyHeaders(&request, config: config)
 
-        let userMaxTokens = config.maxTokens > 0 ? config.maxTokens : 4096
-        let chars = promptLength ?? messages.reduce(0) { $0 + $1.content.count }
-        let approxPromptTokens = max(64, chars / 4)
-        let minTokensForOutput = approxPromptTokens + 512
-
-        let reasoningEffortParam: String? = config.reasoningEffort == .off ? nil : config.reasoningEffort.rawValue
-        var thinkingParam: ChatThinking? = nil
-        var maxThinkingTokensParam: Int? = nil
-        var maxTokensParam: Int = userMaxTokens
-
-        switch config.thinkingBudgetMode {
-        case .off:
-            thinkingParam = nil
-            maxThinkingTokensParam = nil
-            maxTokensParam = max(userMaxTokens, minTokensForOutput)
-        case .fixed1024:
-            let budget = 1024
-            thinkingParam = ChatThinking(type: "enabled", budget_tokens: budget)
-            maxThinkingTokensParam = budget
-            maxTokensParam = max(userMaxTokens, budget + minTokensForOutput)
-        case .proportional:
-            let budget = max(256, approxPromptTokens * 2)
-            thinkingParam = ChatThinking(type: "enabled", budget_tokens: budget)
-            maxThinkingTokensParam = budget
-            maxTokensParam = max(userMaxTokens, budget + minTokensForOutput)
-        }
-
-        let body = ChatRequest(
-            model: config.isProxy ? nil : config.model,
+        let payloadInfo = buildUniversalPayload(
             messages: messages,
-            temperature: 0.3,
-            max_tokens: maxTokensParam,
-            max_completion_tokens: maxTokensParam,
-            reasoning_effort: reasoningEffortParam,
-            thinking: thinkingParam,
-            max_thinking_tokens: maxThinkingTokensParam,
-            stream: true
+            config: config,
+            promptLength: promptLength,
+            stream: true,
+            isFallback: isFallback
         )
-        guard let data = try? JSONEncoder().encode(body) else {
+        guard let data = payloadInfo.data else {
             completion(.failure(.parse("кодирование запроса")))
             return nil
         }
         request.httpBody = data
 
-        let budgetDesc = maxThinkingTokensParam != nil ? ", thinking_budget=\(maxThinkingTokensParam!)" : ""
-        let effortDesc = reasoningEffortParam != nil ? ", effort=\(reasoningEffortParam!)" : ""
-        AppLogger.shared.info("AI", "Стриминг-запрос к модели", details: "\(config.baseURL) / \(config.model), max_tokens=\(maxTokensParam)\(effortDesc)\(budgetDesc), токенов в промпте ~\(messages.reduce(0) { $0 + $1.content.count } / 4)")
+        AppLogger.shared.info("AI", isFallback ? "Стриминг-запрос (fallback)" : "Стриминг-запрос к модели", details: "\(config.baseURL) / \(config.model), \(payloadInfo.debugDesc)")
 
-        return SSEStreamManager.shared.startStream(with: request, onChunk: onChunk, completion: completion)
+        let allowReasoning = (config.reasoningEffort != .off || config.thinkingBudgetMode != .off)
+
+        return SSEStreamManager.shared.startStream(
+            with: request,
+            allowReasoning: allowReasoning,
+            onChunk: onChunk
+        ) { [weak self] result in
+            switch result {
+            case .failure(let error):
+                if case .http(let code, let msg) = error, code == 400, !isFallback {
+                    AppLogger.shared.warn("AI", "Стриминг вернул HTTP 400, выполняем повтор с чистым fallback payload", details: msg)
+                    _ = self?.chatStream(
+                        messages: messages,
+                        using: config,
+                        promptLength: promptLength,
+                        isFallback: true,
+                        onChunk: onChunk,
+                        completion: completion
+                    )
+                    return
+                }
+                completion(.failure(error))
+            case .success(let val):
+                completion(.success(val))
+            }
+        }
     }
 
     @discardableResult
-    func chat(messages: [AIChatMessage], using config: AIProviderConfig, promptLength: Int? = nil, completion: @escaping (Result<String, AIError>) -> Void) -> URLSessionDataTask? {
+    func chat(
+        messages: [AIChatMessage],
+        using config: AIProviderConfig,
+        promptLength: Int? = nil,
+        isFallback: Bool = false,
+        completion: @escaping (Result<String, AIError>) -> Void
+    ) -> URLSessionDataTask? {
         guard let url = url(config.baseURL, path: "chat/completions") else {
             completion(.failure(.invalidURL))
             return nil
@@ -557,55 +664,22 @@ final class AIService {
         }
         addProxyHeaders(&request, config: config)
 
-        let userMaxTokens = config.maxTokens > 0 ? config.maxTokens : 4096
-        let chars = promptLength ?? messages.reduce(0) { $0 + $1.content.count }
-        let approxPromptTokens = max(64, chars / 4)
-        let minTokensForOutput = approxPromptTokens + 512
-
-        let reasoningEffortParam: String? = config.reasoningEffort == .off ? nil : config.reasoningEffort.rawValue
-        var thinkingParam: ChatThinking? = nil
-        var maxThinkingTokensParam: Int? = nil
-        var maxTokensParam: Int = userMaxTokens
-
-        switch config.thinkingBudgetMode {
-        case .off:
-            thinkingParam = nil
-            maxThinkingTokensParam = nil
-            maxTokensParam = max(userMaxTokens, minTokensForOutput)
-        case .fixed1024:
-            let budget = 1024
-            thinkingParam = ChatThinking(type: "enabled", budget_tokens: budget)
-            maxThinkingTokensParam = budget
-            maxTokensParam = max(userMaxTokens, budget + minTokensForOutput)
-        case .proportional:
-            let budget = max(256, approxPromptTokens * 2)
-            thinkingParam = ChatThinking(type: "enabled", budget_tokens: budget)
-            maxThinkingTokensParam = budget
-            maxTokensParam = max(userMaxTokens, budget + minTokensForOutput)
-        }
-
-        let body = ChatRequest(
-            model: config.isProxy ? nil : config.model,
+        let payloadInfo = buildUniversalPayload(
             messages: messages,
-            temperature: 0.3,
-            max_tokens: maxTokensParam,
-            max_completion_tokens: maxTokensParam,
-            reasoning_effort: reasoningEffortParam,
-            thinking: thinkingParam,
-            max_thinking_tokens: maxThinkingTokensParam,
-            stream: false
+            config: config,
+            promptLength: promptLength,
+            stream: false,
+            isFallback: isFallback
         )
-        guard let data = try? JSONEncoder().encode(body) else {
+        guard let data = payloadInfo.data else {
             completion(.failure(.parse("кодирование запроса")))
             return nil
         }
         request.httpBody = data
 
-        let budgetDesc = maxThinkingTokensParam != nil ? ", thinking_budget=\(maxThinkingTokensParam!)" : ""
-        let effortDesc = reasoningEffortParam != nil ? ", effort=\(reasoningEffortParam!)" : ""
-        AppLogger.shared.info("AI", "Запрос к модели", details: "\(config.baseURL) / \(config.model), max_tokens=\(maxTokensParam)\(effortDesc)\(budgetDesc), токенов в промпте ~\(messages.reduce(0) { $0 + $1.content.count } / 4)")
+        AppLogger.shared.info("AI", isFallback ? "Запрос к модели (fallback)" : "Запрос к модели", details: "\(config.baseURL) / \(config.model), \(payloadInfo.debugDesc)")
 
-        let task = session.dataTask(with: request) { data, response, error in
+        let task = session.dataTask(with: request) { [weak self] data, response, error in
             if let error {
                 if (error as NSError).code == NSURLErrorCancelled {
                     AppLogger.shared.info("AI", "Запрос к модели отменён пользователем")
@@ -622,8 +696,20 @@ final class AIService {
                 completion(.failure(.emptyResponse))
                 return
             }
-            guard (200..<300).contains(http.statusCode) else {
-                completion(.failure(.http(http.statusCode, Self.extractError(from: data) ?? "HTTP \(http.statusCode)")))
+            if !(200..<300).contains(http.statusCode) {
+                let errDetail = Self.extractError(from: data) ?? "HTTP \(http.statusCode)"
+                if http.statusCode == 400 && !isFallback {
+                    AppLogger.shared.warn("AI", "Провайдер вернул HTTP 400, выполняем повтор с чистым fallback payload", details: errDetail)
+                    _ = self?.chat(
+                        messages: messages,
+                        using: config,
+                        promptLength: promptLength,
+                        isFallback: true,
+                        completion: completion
+                    )
+                    return
+                }
+                completion(.failure(.http(http.statusCode, errDetail)))
                 return
             }
             guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
@@ -746,10 +832,12 @@ final class SSEStreamManager: NSObject, URLSessionDataDelegate {
         var hasCompleted = false
         var httpStatusCode: Int?
         var errorData: Data?
+        let allowReasoning: Bool
         let onChunk: (String, String?) -> Void
         let completion: (Result<String, AIError>) -> Void
 
-        init(onChunk: @escaping (String, String?) -> Void, completion: @escaping (Result<String, AIError>) -> Void) {
+        init(allowReasoning: Bool, onChunk: @escaping (String, String?) -> Void, completion: @escaping (Result<String, AIError>) -> Void) {
+            self.allowReasoning = allowReasoning
             self.onChunk = onChunk
             self.completion = completion
         }
@@ -768,11 +856,12 @@ final class SSEStreamManager: NSObject, URLSessionDataDelegate {
 
     func startStream(
         with request: URLRequest,
+        allowReasoning: Bool = true,
         onChunk: @escaping (String, String?) -> Void,
         completion: @escaping (Result<String, AIError>) -> Void
     ) -> URLSessionDataTask {
         let task = session.dataTask(with: request)
-        let context = TaskContext(onChunk: onChunk, completion: completion)
+        let context = TaskContext(allowReasoning: allowReasoning, onChunk: onChunk, completion: completion)
         lock.lock()
         contexts[task.taskIdentifier] = context
         lock.unlock()
@@ -835,7 +924,7 @@ final class SSEStreamManager: NSObject, URLSessionDataDelegate {
                 }
 
                 let rawContent = delta["content"] as? String
-                let rawReasoning = (delta["reasoning_content"] as? String) ?? (delta["thinking"] as? String)
+                let rawReasoning = ctx.allowReasoning ? ((delta["reasoning_content"] as? String) ?? (delta["thinking"] as? String)) : nil
 
                 var contentChunk: String? = nil
                 var reasoningChunk: String? = nil
@@ -855,14 +944,16 @@ final class SSEStreamManager: NSObject, URLSessionDataDelegate {
                             let parts = text.components(separatedBy: "</think>")
                             let thinkPart = parts.first ?? ""
                             let cleanPart = parts.dropFirst().joined(separator: "</think>")
-                            if !thinkPart.isEmpty {
+                            if ctx.allowReasoning && !thinkPart.isEmpty {
                                 reasoningChunk = (reasoningChunk ?? "") + thinkPart
                             }
                             if !cleanPart.isEmpty {
                                 contentChunk = cleanPart
                             }
                         } else {
-                            reasoningChunk = (reasoningChunk ?? "") + text
+                            if ctx.allowReasoning {
+                                reasoningChunk = (reasoningChunk ?? "") + text
+                            }
                         }
                     } else {
                         contentChunk = text
