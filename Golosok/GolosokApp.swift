@@ -3,6 +3,7 @@ import AppKit
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
+        KeyStore.migrateAllIfNeeded()
         let mic = PermissionManager.shared.isMicGranted
         let ax = PermissionManager.shared.isAccessibilityGranted
         AppLogger.shared.info("App", "Запуск Golosok",

@@ -7,6 +7,7 @@ struct SettingsView: View {
     @ObservedObject var models = ModelStore.shared
     @ObservedObject var hotKey = HotKeySettings.shared
     @ObservedObject var techTerms = TechTermStore.shared
+    @ObservedObject var promptStore = PromptStore.shared
     @State private var showingClearHistoryAlert = false
     @State private var showingAboutSheet = false
     @State private var showingLogsSheet = false
@@ -317,6 +318,25 @@ struct SettingsView: View {
                             TechTermManagerView()
                         }
 
+                        if techTerms.isReplacementEnabled && audioCapture.autoAIProcessEnabled {
+                            Divider().background(Color.uiHairline)
+
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Автопополнение словаря из правок ИИ")
+                                        .font(UIStyleFont.body(size: 13, weight: .medium))
+                                        .foregroundColor(.uiInk)
+                                    Text("Добавление исключений и терминов при исправлении текста моделью")
+                                        .font(UIStyleFont.body(size: 11, weight: .regular))
+                                        .foregroundColor(.uiMidGray)
+                                }
+                                Spacer()
+                                Toggle("", isOn: $techTerms.isAutoLearnEnabled)
+                                    .labelsHidden()
+                                    .toggleStyle(SwitchToggleStyle(tint: Color(hex: "#10B981")))
+                            }
+                        }
+
                         Divider().background(Color.uiHairline)
 
                         HStack {
@@ -349,6 +369,47 @@ struct SettingsView: View {
                     }
                 }
                 
+                // РАЗДЕЛ 3.4: АВТОМАТИЧЕСКАЯ ИИ-ОБРАБОТКА
+                UICard {
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text("АВТОМАТИЧЕСКАЯ ИИ-ОБРАБОТКА")
+                            .font(UIStyleFont.body(size: 11, weight: .bold))
+                            .tracking(1.0)
+                            .foregroundColor(.uiMidGray)
+
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Применять ИИ-шаблон к каждой записи")
+                                    .font(UIStyleFont.body(size: 13, weight: .medium))
+                                    .foregroundColor(.uiInk)
+                                Text("Автоматическая обработка текста сразу после распознавания речи")
+                                    .font(UIStyleFont.body(size: 11, weight: .regular))
+                                    .foregroundColor(.uiMidGray)
+                            }
+                            Spacer()
+                            Toggle("", isOn: $audioCapture.autoAIProcessEnabled)
+                                .labelsHidden()
+                                .toggleStyle(SwitchToggleStyle(tint: Color(hex: "#10B981")))
+                        }
+
+                        if audioCapture.autoAIProcessEnabled {
+                            Divider().background(Color.uiHairline)
+
+                            HStack {
+                                Text("Выбранный шаблон")
+                                    .font(UIStyleFont.body(size: 13, weight: .medium))
+                                    .foregroundColor(.uiInk)
+                                Spacer()
+                                UIDropdownPicker(selection: $audioCapture.autoAIProcessTemplateID, options: promptStore.templates.map { t in
+                                    let isBuiltin = AIPromptDefaults.builtinIDs.contains(t.id)
+                                    let text = (!t.isCustom || isBuiltin) ? String(localized: String.LocalizationValue(t.title)) : t.title
+                                    return UIDropdownOption(text, icon: t.icon, value: t.id)
+                                }, width: 220)
+                            }
+                        }
+                    }
+                }
+
                 // РАЗДЕЛ 3.5: ИИ-ПРОВАЙДЕР
                 AIProviderSection()
 

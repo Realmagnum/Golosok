@@ -6,18 +6,19 @@ struct AIChatMessage: Codable {
     let content: String
 }
 
-struct AIProviderPreset: Identifiable {
+struct AIProviderPreset: Identifiable, Codable {
     let id: String
-    let name: String
-    let hint: LocalizedStringKey
-    let baseURL: String
-    let defaultModel: String
-    let needsKey: Bool
+    var name: String
+    var hint: String
+    var baseURL: String
+    var defaultModel: String
+    var needsKey: Bool
     var isProxy: Bool = false
+    var isCustom: Bool = false
 }
 
 enum AIProviderPresets {
-    static let all: [AIProviderPreset] = [
+    static let builtin: [AIProviderPreset] = [
         AIProviderPreset(
             id: "openai",
             name: "OpenAI",
@@ -27,11 +28,11 @@ enum AIProviderPresets {
             needsKey: true
         ),
         AIProviderPreset(
-            id: "groq",
-            name: "Groq",
-            hint: "llama-3.3-70b-versatile",
-            baseURL: "https://api.groq.com/openai/v1",
-            defaultModel: "llama-3.3-70b-versatile",
+            id: "neuraldeep",
+            name: "Neuraldeep (NP)",
+            hint: "neuraldeep.ru — API & OAuth2",
+            baseURL: "https://api.neuraldeep.ru/v1",
+            defaultModel: "neuraldeep/qwen3.8-27b",
             needsKey: true
         ),
         AIProviderPreset(
@@ -43,9 +44,17 @@ enum AIProviderPresets {
             needsKey: true
         ),
         AIProviderPreset(
+            id: "groq",
+            name: "Groq",
+            hint: "llama-3.3-70b-versatile",
+            baseURL: "https://api.groq.com/openai/v1",
+            defaultModel: "llama-3.3-70b-versatile",
+            needsKey: true
+        ),
+        AIProviderPreset(
             id: "ollama",
-            name: "Ollama (локально)",
-            hint: "LM Studio / локальный сервер",
+            name: "Local AI",
+            hint: "LM Studio / Ollama / Local",
             baseURL: "http://localhost:11434/v1",
             defaultModel: "gemma3:1b",
             needsKey: false
@@ -60,6 +69,10 @@ enum AIProviderPresets {
             isProxy: true
         )
     ]
+
+    static var all: [AIProviderPreset] {
+        AIProviderStore.shared.allPresets
+    }
 
     static func preset(id: String) -> AIProviderPreset? {
         all.first { $0.id == id }
@@ -177,11 +190,43 @@ final class AIProviderStore: ObservableObject {
     @Published var testOK = false
     @Published var installedModels: [String] = []
     @Published var isLoadingModels = false
+    @Published var customPresets: [AIProviderPreset] = []
+    @Published var customDisplayNames: [String: String] = [:]
+
+    var allPresets: [AIProviderPreset] {
+        (AIProviderPresets.builtin + customPresets).map { preset in
+            var p = preset
+            if let customName = customDisplayNames[preset.id], !customName.isEmpty {
+                p.name = customName
+            }
+            return p
+        }
+    }
 
     private static let defaults = UserDefaults.standard
 
+    private var customPresetsFileURL: URL? {
+        guard let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return nil }
+        let dir = base.appendingPathComponent("Golosok", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.appendingPathComponent("custom_ai_providers.json")
+    }
+
     private init() {
-        let initialPreset = AIProviderPresets.preset(id: Self.defaults.string(forKey: "ai.providerID") ?? "") ?? AIProviderPresets.all[0]
+        if let savedNames = Self.defaults.dictionary(forKey: "ai.provider.custom_names") as? [String: String] {
+            customDisplayNames = savedNames
+        }
+
+        // Загрузка кастомных провайдеров
+        if let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+            let fileURL = base.appendingPathComponent("Golosok/custom_ai_providers.json")
+            if let data = try? Data(contentsOf: fileURL),
+               let list = try? JSONDecoder().decode([AIProviderPreset].self, from: data) {
+                customPresets = list
+            }
+        }
+
+        let initialPreset = AIProviderPresets.preset(id: Self.defaults.string(forKey: "ai.providerID") ?? "") ?? AIProviderPresets.builtin[0]
         let currentID = Self.defaults.string(forKey: "ai.providerID") ?? initialPreset.id
         providerID = currentID
         baseURL = Self.defaults.string(forKey: "ai.provider.\(currentID).baseURL")
@@ -210,6 +255,66 @@ final class AIProviderStore: ObservableObject {
         }
 
         maxTokensString = Self.defaults.string(forKey: "ai.maxTokens") ?? "4096" 
+    }
+
+    func setPresetName(_ newName: String, for presetId: String) {
+        let clean = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if clean.isEmpty {
+            customDisplayNames.removeValue(forKey: presetId)
+        } else {
+            customDisplayNames[presetId] = clean
+        }
+        Self.defaults.set(customDisplayNames, forKey: "ai.provider.custom_names")
+        objectWillChange.send()
+    }
+
+    func addCustomPreset(name: String, baseURL: String, model: String, apiKey: String?) {
+        let cleanName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanName.isEmpty, !cleanURL.isEmpty else { return }
+
+        let id = "custom_" + UUID().uuidString.prefix(8)
+        let preset = AIProviderPreset(
+            id: id,
+            name: cleanName,
+            hint: cleanURL,
+            baseURL: cleanURL,
+            defaultModel: cleanModel.isEmpty ? "default" : cleanModel,
+            needsKey: true,
+            isProxy: false,
+            isCustom: true
+        )
+        customPresets.append(preset)
+        persistCustomPresets()
+
+        if let key = apiKey?.trimmingCharacters(in: .whitespacesAndNewlines), !key.isEmpty {
+            KeyStore.set(key, for: "ai.provider.\(id).apiKey")
+        }
+
+        apply(preset)
+    }
+
+    func deleteCustomPreset(id: String) {
+        customPresets.removeAll { $0.id == id }
+        customDisplayNames.removeValue(forKey: id)
+        Self.defaults.set(customDisplayNames, forKey: "ai.provider.custom_names")
+        persistCustomPresets()
+        KeyStore.delete("ai.provider.\(id).apiKey")
+
+        if providerID == id {
+            if let first = AIProviderPresets.builtin.first {
+                apply(first)
+            }
+        } else {
+            objectWillChange.send()
+        }
+    }
+
+    private func persistCustomPresets() {
+        guard let url = customPresetsFileURL,
+              let data = try? JSONEncoder().encode(customPresets) else { return }
+        try? data.write(to: url, options: .atomic)
     }
 
     var currentPreset: AIProviderPreset? {

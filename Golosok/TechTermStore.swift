@@ -28,12 +28,18 @@ final class TechTermStore: ObservableObject {
             UserDefaults.standard.set(isReplacementEnabled, forKey: "techterms.replacement.enabled")
         }
     }
+    @Published var isAutoLearnEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(isAutoLearnEnabled, forKey: "techterms.autoLearn.enabled")
+        }
+    }
 
     private let ioQueue = DispatchQueue(label: "Golosok.TechTermStore.io")
     private var compiledRegexCache: [(regex: NSRegularExpression, canonical: String)] = []
 
     private init() {
         self.isReplacementEnabled = UserDefaults.standard.object(forKey: "techterms.replacement.enabled") as? Bool ?? true
+        self.isAutoLearnEnabled = UserDefaults.standard.object(forKey: "techterms.autoLearn.enabled") as? Bool ?? true
         load()
         rebuildRegexCache()
     }
@@ -182,6 +188,133 @@ final class TechTermStore: ObservableObject {
             )
         }
         return result
+    }
+
+    // MARK: - Автоматическое обучение словаря на основе правок ИИ
+
+    @discardableResult
+    func autoLearn(fromRaw rawVoiceText: String, aiCorrected: String) -> Int {
+        guard isAutoLearnEnabled, isReplacementEnabled else { return 0 }
+        let pairs = extractDiffPairs(raw: rawVoiceText, ai: aiCorrected)
+        guard !pairs.isEmpty else { return 0 }
+
+        var changesCount = 0
+
+        for pair in pairs {
+            let canonical = pair.canonical.trimmingCharacters(in: .whitespacesAndNewlines)
+            let rawPattern = pair.rawPhrase.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !canonical.isEmpty, !rawPattern.isEmpty else { continue }
+            guard canonical.lowercased() != rawPattern.lowercased() else { continue }
+
+            if let existingIdx = rules.firstIndex(where: { $0.canonical.caseInsensitiveCompare(canonical) == .orderedSame }) {
+                // Добавляем к существующему правилу, проверяя на дубликаты
+                let existingPats = Set(rules[existingIdx].patterns.map { $0.lowercased() })
+                if !existingPats.contains(rawPattern.lowercased()) {
+                    rules[existingIdx].patterns.append(rawPattern)
+                    changesCount += 1
+                    AppLogger.shared.info("TechTerms", "Словарь пополнен новым вариантом", details: "\(canonical) <- '\(rawPattern)'")
+                }
+            } else {
+                // Создаем новое правило для ранее неизвестного термина
+                let newRule = TechTermRule(canonical: canonical, patterns: [rawPattern], isEnabled: true)
+                rules.append(newRule)
+                changesCount += 1
+                AppLogger.shared.info("TechTerms", "Словарь пополнен новым термином", details: "\(canonical) <- '\(rawPattern)'")
+            }
+        }
+
+        if changesCount > 0 {
+            rebuildRegexCache()
+            persist()
+        }
+        return changesCount
+    }
+
+    private func extractDiffPairs(raw: String, ai: String) -> [(rawPhrase: String, canonical: String)] {
+        func clean(_ w: String) -> String {
+            w.trimmingCharacters(in: CharacterSet.punctuationCharacters.union(.whitespacesAndNewlines))
+        }
+
+        let englishStopwords: Set<String> = [
+            "the", "and", "in", "on", "at", "to", "for", "of", "with", "is", "are", "was", "were",
+            "a", "an", "this", "that", "it", "from", "by", "as", "be", "or", "not", "your", "my", "we", "you",
+            "he", "she", "they", "them", "his", "her", "their", "so", "if", "but", "about", "into", "then"
+        ]
+
+        let rawTokens = raw.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }
+        let aiTokens = ai.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }
+
+        let n = rawTokens.count
+        let m = aiTokens.count
+        guard n > 0 && m > 0 else { return [] }
+
+        var dp = Array(repeating: Array(repeating: 0, count: m + 1), count: n + 1)
+        for i in 1...n {
+            for j in 1...m {
+                let rClean = clean(rawTokens[i - 1]).lowercased()
+                let aClean = clean(aiTokens[j - 1]).lowercased()
+                if rClean == aClean && !rClean.isEmpty {
+                    dp[i][j] = dp[i - 1][j - 1] + 1
+                } else {
+                    dp[i][j] = max(dp[i - 1][j], dp[i][j - 1])
+                }
+            }
+        }
+
+        var pairs: [(rawPhrase: String, canonical: String)] = []
+        var i = n
+        var j = m
+
+        var diffRaw: [String] = []
+        var diffAI: [String] = []
+
+        func flushDiff() {
+            if !diffRaw.isEmpty && !diffAI.isEmpty {
+                let cleanRawList = diffRaw.map { clean($0) }.filter { !$0.isEmpty }
+                let cleanAIList = diffAI.map { clean($0) }.filter { !$0.isEmpty }
+
+                if cleanRawList.count == cleanAIList.count && cleanRawList.count > 1 {
+                    for k in 0..<cleanRawList.count {
+                        let r = cleanRawList[k]
+                        let a = cleanAIList[k]
+                        if !r.isEmpty && !a.isEmpty && r.lowercased() != a.lowercased() {
+                            if a.range(of: "[a-zA-Z]", options: .regularExpression) != nil && !englishStopwords.contains(a.lowercased()) {
+                                pairs.append((rawPhrase: r, canonical: a))
+                            }
+                        }
+                    }
+                } else {
+                    let rawStr = cleanRawList.joined(separator: " ")
+                    let aiStr = cleanAIList.joined(separator: " ")
+                    if !rawStr.isEmpty && !aiStr.isEmpty && rawStr.lowercased() != aiStr.lowercased() {
+                        if aiStr.range(of: "[a-zA-Z]", options: .regularExpression) != nil && !englishStopwords.contains(aiStr.lowercased()) {
+                            pairs.append((rawPhrase: rawStr, canonical: aiStr))
+                        }
+                    }
+                }
+            }
+            diffRaw.removeAll()
+            diffAI.removeAll()
+        }
+
+        while i > 0 || j > 0 {
+            if i > 0 && j > 0 && clean(rawTokens[i - 1]).lowercased() == clean(aiTokens[j - 1]).lowercased() && !clean(rawTokens[i - 1]).isEmpty {
+                flushDiff()
+                i -= 1
+                j -= 1
+            } else if j > 0 && (i == 0 || dp[i][j - 1] >= dp[i - 1][j]) {
+                diffAI.insert(aiTokens[j - 1], at: 0)
+                j -= 1
+            } else if i > 0 && (j == 0 || dp[i][j - 1] < dp[i - 1][j]) {
+                diffRaw.insert(rawTokens[i - 1], at: 0)
+                i -= 1
+            } else {
+                break
+            }
+        }
+        flushDiff()
+
+        return pairs.reversed()
     }
 
     // MARK: - Внутренняя оптимизация регулярных выражений

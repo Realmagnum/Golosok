@@ -131,6 +131,12 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
     @Published var autoPasteEnabled: Bool = UserDefaults.standard.object(forKey: "autoPasteEnabled") as? Bool ?? true {
         didSet { UserDefaults.standard.set(autoPasteEnabled, forKey: "autoPasteEnabled") }
     }
+    @Published var autoAIProcessEnabled: Bool = UserDefaults.standard.bool(forKey: "ai.autoProcess.enabled") {
+        didSet { UserDefaults.standard.set(autoAIProcessEnabled, forKey: "ai.autoProcess.enabled") }
+    }
+    @Published var autoAIProcessTemplateID: String = UserDefaults.standard.string(forKey: "ai.autoProcess.templateID") ?? "restoreTechTerms" {
+        didSet { UserDefaults.standard.set(autoAIProcessTemplateID, forKey: "ai.autoProcess.templateID") }
+    }
     @Published var analyticsEnabled: Bool = UserDefaults.standard.object(forKey: "analyticsEnabled") as? Bool ?? true {
         didSet { UserDefaults.standard.set(analyticsEnabled, forKey: "analyticsEnabled") }
     }
@@ -499,7 +505,36 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         
         let rawText = accumulatedText.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
         let termsCorrectedText = TechTermStore.shared.applyReplacements(to: rawText)
-        let prettyFormattedText = TextFormatter.formatIntoParagraphs(termsCorrectedText)
+
+        var processedText = termsCorrectedText
+        if autoAIProcessEnabled && !termsCorrectedText.isEmpty {
+            let templateID = autoAIProcessTemplateID
+            if let template = PromptStore.shared.templates.first(where: { $0.id == templateID }) ?? PromptStore.shared.templates.first {
+                DispatchQueue.main.async {
+                    self.transcribedText = "ИИ: \(template.title)…"
+                }
+                let semaphore = DispatchSemaphore(value: 0)
+                let messages = template.messages(for: termsCorrectedText)
+                AIService.shared.chat(messages: messages, using: AIProviderStore.shared.config, promptLength: termsCorrectedText.count) { result in
+                    switch result {
+                    case .success(let aiOutput):
+                        let clean = aiOutput.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if !clean.isEmpty {
+                            if TechTermStore.shared.isReplacementEnabled && TechTermStore.shared.isAutoLearnEnabled {
+                                TechTermStore.shared.autoLearn(fromRaw: rawText, aiCorrected: clean)
+                            }
+                            processedText = clean
+                        }
+                    case .failure(let error):
+                        AppLogger.shared.warn("AI", "Автоматическая ИИ-обработка не удалась", details: error.localizedDescription)
+                    }
+                    semaphore.signal()
+                }
+                _ = semaphore.wait(timeout: .now() + 60)
+            }
+        }
+
+        let prettyFormattedText = TextFormatter.formatIntoParagraphs(processedText)
         let processingTimeSecs = Date().timeIntervalSince(processStartTime)
         let calculatedSpeedup = max(1.0, realAudioSecs / max(0.1, processingTimeSecs))
         
@@ -840,7 +875,36 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
 
             let rawText = accumulatedText.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
             let termsCorrectedText = TechTermStore.shared.applyReplacements(to: rawText)
-            let prettyFormattedText = TextFormatter.formatIntoParagraphs(termsCorrectedText)
+
+            var processedText = termsCorrectedText
+            if self.autoAIProcessEnabled && !termsCorrectedText.isEmpty {
+                let templateID = self.autoAIProcessTemplateID
+                if let template = PromptStore.shared.templates.first(where: { $0.id == templateID }) ?? PromptStore.shared.templates.first {
+                    DispatchQueue.main.async {
+                        self.transcribedText = "ИИ: \(template.title)…"
+                    }
+                    let semaphore = DispatchSemaphore(value: 0)
+                    let messages = template.messages(for: termsCorrectedText)
+                    AIService.shared.chat(messages: messages, using: AIProviderStore.shared.config, promptLength: termsCorrectedText.count) { result in
+                        switch result {
+                        case .success(let aiOutput):
+                            let clean = aiOutput.trimmingCharacters(in: .whitespacesAndNewlines)
+                            if !clean.isEmpty {
+                                if TechTermStore.shared.isReplacementEnabled && TechTermStore.shared.isAutoLearnEnabled {
+                                    TechTermStore.shared.autoLearn(fromRaw: rawText, aiCorrected: clean)
+                                }
+                                processedText = clean
+                            }
+                        case .failure(let error):
+                            AppLogger.shared.warn("AI", "Автоматическая ИИ-обработка при повторном распознавании не удалась", details: error.localizedDescription)
+                        }
+                        semaphore.signal()
+                    }
+                    _ = semaphore.wait(timeout: .now() + 60)
+                }
+            }
+
+            let prettyFormattedText = TextFormatter.formatIntoParagraphs(processedText)
             let processingTimeSecs = Date().timeIntervalSince(processStartTime)
             let calculatedSpeedup = max(1.0, realAudioSecs / max(0.1, processingTimeSecs))
 

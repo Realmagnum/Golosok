@@ -71,6 +71,16 @@ struct TechTermManagerView: View {
                     .foregroundColor(.uiInk)
             }
 
+            // Автообучение из ИИ
+            HStack(spacing: 6) {
+                Toggle("", isOn: $store.isAutoLearnEnabled)
+                    .labelsHidden()
+                    .toggleStyle(SwitchToggleStyle(tint: Color(hex: "#10B981")))
+                Text("Автообучение из ИИ")
+                    .font(UIStyleFont.body(size: 11, weight: .regular))
+                    .foregroundColor(.uiMidGray)
+            }
+
             Spacer()
 
             // Кнопка Импорт
