@@ -15,7 +15,7 @@ final class NeuralDeepOAuthService: ObservableObject {
     private let queue = DispatchQueue(label: "Golosok.NeuralDeepOAuth", qos: .userInitiated)
 
     private static let hubURL = "https://hub.neuraldeep.ru"
-    private static let clientID = "coddy" // Официальный зарегистрированный allowlist-клиент хаба
+    private static let clientID = "golosok"
 
     private init() {}
 
