@@ -32,7 +32,7 @@ enum AIProviderPresets {
             name: "Neuraldeep (NP)",
             hint: "neuraldeep.ru — API & OAuth2",
             baseURL: "https://api.neuraldeep.ru/v1",
-            defaultModel: "neuraldeep/qwen3.8-27b",
+            defaultModel: "qwen3.6-fp8-noreason",
             needsKey: true
         ),
         AIProviderPreset(
@@ -239,9 +239,15 @@ final class AIProviderStore: ObservableObject {
         self.baseURL = Self.defaults.string(forKey: "ai.provider.\(currentID).baseURL")
             ?? Self.defaults.string(forKey: "ai.baseURL")
             ?? initialPreset.baseURL
-        self.model = Self.defaults.string(forKey: "ai.provider.\(currentID).model")
+        var resolvedModel = Self.defaults.string(forKey: "ai.provider.\(currentID).model")
             ?? Self.defaults.string(forKey: "ai.model")
             ?? initialPreset.defaultModel
+        if currentID == "neuraldeep" && (resolvedModel == "neuraldeep/qwen3.8-27b" || resolvedModel.isEmpty) {
+            resolvedModel = "qwen3.6-fp8-noreason"
+            Self.defaults.set(resolvedModel, forKey: "ai.provider.neuraldeep.model")
+            Self.defaults.set(resolvedModel, forKey: "ai.model")
+        }
+        self.model = resolvedModel
         self.apiKey = KeyStore.get("ai.provider.\(currentID).apiKey")
             ?? KeyStore.get("ai.apiKey")
             ?? ""
@@ -361,7 +367,11 @@ final class AIProviderStore: ObservableObject {
         // Восстанавливаем ранее сохраненные настройки именно для этого провайдера,
         // либо берем дефолтные значения пресета
         baseURL = Self.defaults.string(forKey: "ai.provider.\(preset.id).baseURL") ?? preset.baseURL
-        model = Self.defaults.string(forKey: "ai.provider.\(preset.id).model") ?? preset.defaultModel
+        var savedModel = Self.defaults.string(forKey: "ai.provider.\(preset.id).model") ?? preset.defaultModel
+        if preset.id == "neuraldeep" && savedModel == "neuraldeep/qwen3.8-27b" {
+            savedModel = "qwen3.6-fp8-noreason"
+        }
+        model = savedModel
         apiKey = KeyStore.get("ai.provider.\(preset.id).apiKey") ?? (preset.needsKey ? "" : "")
 
         testResult = nil
