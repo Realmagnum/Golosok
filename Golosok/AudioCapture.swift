@@ -57,6 +57,8 @@ struct SubtitleCue: Equatable {
 class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
     static let shared = AudioCapture()
     
+    private static let chunkOverlapSeconds = 0.75
+
     private var audioRecorder: AVAudioRecorder?
     private var timer: Timer?
     private var startTime: Date?
@@ -468,45 +470,62 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         else { durationFormatted = String(format: String(localized: "%.0f сек"), realAudioSecs.rounded()) }
         
         let chunkSizeInSeconds: Double = 25.0
-        let framesPerChunk = AVAudioFrameCount(chunkSizeInSeconds * sampleRate)
-        let totalChunks = max(1, Int(ceil(Double(totalFrames) / Double(framesPerChunk))))
         
         var accumulatedText: [String] = []
         var accumulatedWords: [TimedWord] = []
+        var accumulatedWordTexts: [String] = []
         let targetFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16000, channels: 1, interleaved: false)!
         
-        for chunkIndex in 0..<totalChunks {
+        var chunkIndex = 0
+        var coveredThroughFrame: Int64 = 0
+        while coveredThroughFrame < totalFrames {
             autoreleasepool {
-                let startFrame = Int64(chunkIndex) * Int64(framesPerChunk)
-                let frameCountToRead = min(framesPerChunk, AVAudioFrameCount(totalFrames - startFrame))
+                let overlapFrames = Int64(Self.chunkOverlapSeconds * sampleRate)
+                let chunkStartFrame = max(0, coveredThroughFrame - overlapFrames)
+                let newAudioFrames = Int64((chunkSizeInSeconds - Self.chunkOverlapSeconds) * sampleRate)
+                let maxEndFrame = min(totalFrames, coveredThroughFrame + newAudioFrames)
+                let nominalEndFrame = min(maxEndFrame, coveredThroughFrame + Int64(chunkSizeInSeconds * sampleRate))
+                let chunkEndFrame = Self.pauseAwareChunkEnd(in: inputFile, from: coveredThroughFrame, nominalEnd: nominalEndFrame, maximumEnd: maxEndFrame, totalFrames: totalFrames, sampleRate: sampleRate)
+                let frameCountToRead = AVAudioFrameCount(chunkEndFrame - chunkStartFrame)
                 
-                inputFile.framePosition = startFrame
+                inputFile.framePosition = chunkStartFrame
                 guard let pcmBuffer = AVAudioPCMBuffer(pcmFormat: inputFile.processingFormat, frameCapacity: frameCountToRead) else { return }
                 try? inputFile.read(into: pcmBuffer, frameCount: frameCountToRead)
                 
                 let chunkWavURL = FileManager.default.temporaryDirectory.appendingPathComponent("temp_chunk_\(chunkIndex).wav")
                 if writeBufferToWav(buffer: pcmBuffer, targetFormat: targetFormat, outputURL: chunkWavURL) {
-                    let chunkResult = runCLIOnWav(wavURL: chunkWavURL)
-                    let chunkText = chunkResult.text
+                    let chunkResult = runCLIOnWav(wavURL: chunkWavURL, initialPrompt: accumulatedText.last)
+                    let chunkText = Self.removeBoundaryDuplicate(previous: accumulatedWordTexts.joined(separator: " "), current: chunkResult.text)
                     if !chunkText.isEmpty && chunkText != String(localized: "Речь не распознана") { accumulatedText.append(chunkText) }
-                    let chunkStart = Double(chunkIndex) * chunkSizeInSeconds
+                    if chunkResult.words.isEmpty {
+                        accumulatedWordTexts.append(contentsOf: chunkText.split(whereSeparator: \.isWhitespace).map(String.init))
+                    }
+                    let chunkStart = Double(chunkStartFrame) / sampleRate
                     for word in chunkResult.words {
-                        accumulatedWords.append(TimedWord(text: word.text, start: word.start + chunkStart, end: word.end + chunkStart))
+                        let globalStart = word.start + chunkStart
+                        // Only take the newly covered part of the overlapping audio.
+                        if chunkIndex == 0 || globalStart >= Double(coveredThroughFrame) / sampleRate {
+                            accumulatedWords.append(TimedWord(text: word.text, start: globalStart, end: word.end + chunkStart))
+                            accumulatedWordTexts.append(word.text)
+                        }
                     }
                     try? FileManager.default.removeItem(at: chunkWavURL)
                 }
                 
                 if isFileImport {
                     DispatchQueue.main.async {
-                        self.fileProcessingProgress = Double(chunkIndex + 1) / Double(totalChunks)
+                        self.fileProcessingProgress = min(1, Double(chunkEndFrame) / Double(totalFrames))
                         OverlayPanelManager.shared.keepFront()
                     }
                 }
+                coveredThroughFrame = chunkEndFrame
+                chunkIndex += 1
             }
         }
         
         let rawText = accumulatedText.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
-        let termsCorrectedText = TechTermStore.shared.applyReplacements(to: rawText)
+        let normalizedText = TextFormatter.normalizeRussianNumbers(rawText)
+        let termsCorrectedText = TechTermStore.shared.applyReplacements(to: normalizedText)
 
         var processedText = termsCorrectedText
         if autoAIProcessEnabled && !termsCorrectedText.isEmpty {
@@ -879,45 +898,61 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
             let realAudioSecs = Double(totalFrames) / sampleRate
 
             let chunkSizeInSeconds: Double = 25.0
-            let framesPerChunk = AVAudioFrameCount(chunkSizeInSeconds * sampleRate)
-            let totalChunks = max(1, Int(ceil(Double(totalFrames) / Double(framesPerChunk))))
 
             var accumulatedText: [String] = []
             var accumulatedWords: [TimedWord] = []
+            var accumulatedWordTexts: [String] = []
             let targetFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16000, channels: 1, interleaved: false)!
 
-            for chunkIndex in 0..<totalChunks {
+            var chunkIndex = 0
+            var coveredThroughFrame: Int64 = 0
+            while coveredThroughFrame < totalFrames {
                 autoreleasepool {
-                    let startFrame = Int64(chunkIndex) * Int64(framesPerChunk)
-                    let frameCountToRead = min(framesPerChunk, AVAudioFrameCount(totalFrames - startFrame))
+                    let overlapFrames = Int64(Self.chunkOverlapSeconds * sampleRate)
+                    let chunkStartFrame = max(0, coveredThroughFrame - overlapFrames)
+                    let newAudioFrames = Int64((chunkSizeInSeconds - Self.chunkOverlapSeconds) * sampleRate)
+                    let maxEndFrame = min(totalFrames, coveredThroughFrame + newAudioFrames)
+                    let nominalEndFrame = min(maxEndFrame, coveredThroughFrame + Int64(chunkSizeInSeconds * sampleRate))
+                    let chunkEndFrame = Self.pauseAwareChunkEnd(in: inputFile, from: coveredThroughFrame, nominalEnd: nominalEndFrame, maximumEnd: maxEndFrame, totalFrames: totalFrames, sampleRate: sampleRate)
+                    let frameCountToRead = AVAudioFrameCount(chunkEndFrame - chunkStartFrame)
 
-                    inputFile.framePosition = startFrame
+                    inputFile.framePosition = chunkStartFrame
                     guard let pcmBuffer = AVAudioPCMBuffer(pcmFormat: inputFile.processingFormat, frameCapacity: frameCountToRead) else { return }
                     try? inputFile.read(into: pcmBuffer, frameCount: frameCountToRead)
 
                     let chunkWavURL = FileManager.default.temporaryDirectory.appendingPathComponent("retranscribe_chunk_\(chunkIndex).wav")
                     if self.writeBufferToWav(buffer: pcmBuffer, targetFormat: targetFormat, outputURL: chunkWavURL) {
-                        let chunkResult = self.runCLIOnWav(wavURL: chunkWavURL)
-                        let chunkText = chunkResult.text
+                        let chunkResult = self.runCLIOnWav(wavURL: chunkWavURL, initialPrompt: accumulatedText.last)
+                        let chunkText = Self.removeBoundaryDuplicate(previous: accumulatedWordTexts.joined(separator: " "), current: chunkResult.text)
                         if !chunkText.isEmpty && chunkText != String(localized: "Речь не распознана") {
                             accumulatedText.append(chunkText)
                         }
-                        let chunkStart = Double(chunkIndex) * chunkSizeInSeconds
+                        if chunkResult.words.isEmpty {
+                            accumulatedWordTexts.append(contentsOf: chunkText.split(whereSeparator: \.isWhitespace).map(String.init))
+                        }
+                        let chunkStart = Double(chunkStartFrame) / sampleRate
                         for word in chunkResult.words {
-                            accumulatedWords.append(TimedWord(text: word.text, start: word.start + chunkStart, end: word.end + chunkStart))
+                            let globalStart = word.start + chunkStart
+                            if chunkIndex == 0 || globalStart >= Double(coveredThroughFrame) / sampleRate {
+                                accumulatedWords.append(TimedWord(text: word.text, start: globalStart, end: word.end + chunkStart))
+                                accumulatedWordTexts.append(word.text)
+                            }
                         }
                         try? FileManager.default.removeItem(at: chunkWavURL)
                     }
 
                     DispatchQueue.main.async {
-                        self.fileProcessingProgress = Double(chunkIndex + 1) / Double(totalChunks)
+                        self.fileProcessingProgress = min(1, Double(chunkEndFrame) / Double(totalFrames))
                         OverlayPanelManager.shared.keepFront()
                     }
                 }
+                coveredThroughFrame = chunkEndFrame
+                chunkIndex += 1
             }
 
             let rawText = accumulatedText.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
-            let termsCorrectedText = TechTermStore.shared.applyReplacements(to: rawText)
+            let normalizedText = TextFormatter.normalizeRussianNumbers(rawText)
+            let termsCorrectedText = TechTermStore.shared.applyReplacements(to: normalizedText)
 
             var processedText = termsCorrectedText
             if self.autoAIProcessEnabled && !termsCorrectedText.isEmpty {
@@ -1075,8 +1110,77 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
             return true
         } catch { return false }
     }
+
+    /// Search a small window around the nominal boundary for the quietest 80 ms
+    /// frame. This is a lightweight energy-based pause aligner, not a neural VAD.
+    private static func pauseAwareChunkEnd(
+        in file: AVAudioFile,
+        from chunkStart: Int64,
+        nominalEnd: Int64,
+        maximumEnd: Int64,
+        totalFrames: Int64,
+        sampleRate: Double
+    ) -> Int64 {
+        guard nominalEnd < totalFrames,
+              let format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: sampleRate,
+                                         channels: file.processingFormat.channelCount, interleaved: false) else {
+            return nominalEnd
+        }
+        let searchRadius = Int64(1.5 * sampleRate)
+        let lower = max(chunkStart + Int64(10 * sampleRate), nominalEnd - searchRadius)
+        let upper = min(maximumEnd, min(totalFrames - Int64(1.5 * sampleRate), nominalEnd + searchRadius))
+        guard upper > lower else { return nominalEnd }
+
+        let windowFrames = max(1, Int64(0.08 * sampleRate))
+        let hopFrames = max(1, Int64(0.02 * sampleRate))
+        var bestFrame = nominalEnd
+        var bestEnergy = Double.greatestFiniteMagnitude
+        var cursor = lower
+        while cursor + windowFrames <= upper {
+            file.framePosition = cursor
+            guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(windowFrames)) else { break }
+            do {
+                try file.read(into: buffer, frameCount: AVAudioFrameCount(windowFrames))
+            } catch {
+                break
+            }
+            guard let samples = buffer.floatChannelData?[0] else { break }
+            var energy = 0.0
+            for i in 0..<Int(buffer.frameLength) {
+                let sample = Double(samples[i])
+                energy += sample * sample
+            }
+            energy /= Double(max(1, buffer.frameLength))
+            let center = cursor + windowFrames / 2
+            if energy < bestEnergy && abs(center - nominalEnd) <= searchRadius {
+                bestEnergy = energy
+                bestFrame = center
+            }
+            cursor += hopFrames
+        }
+        file.framePosition = chunkStart
+        return min(max(bestFrame, chunkStart + Int64(10 * sampleRate)), maximumEnd)
+    }
+
+    static func removeBoundaryDuplicate(previous: String, current: String, maxWords: Int = 12) -> String {
+        let previousWords = previous.split(whereSeparator: \.isWhitespace).map(String.init)
+        let currentWords = current.split(whereSeparator: \.isWhitespace).map(String.init)
+        let maxOverlap = min(maxWords, previousWords.count, currentWords.count)
+        guard maxOverlap > 0 else { return current }
+        // Require at least two matching words to avoid deleting a genuine
+        // repeated one-word utterance ("да, да", "нет, нет") at the seam.
+        guard maxOverlap >= 2 else { return current }
+        for count in stride(from: maxOverlap, through: 2, by: -1) {
+            let left = previousWords.suffix(count).map { $0.lowercased().trimmingCharacters(in: .punctuationCharacters) }
+            let right = currentWords.prefix(count).map { $0.lowercased().trimmingCharacters(in: .punctuationCharacters) }
+            if left == right {
+                return currentWords.dropFirst(count).joined(separator: " ")
+            }
+        }
+        return current
+    }
     
-    private func runCLIOnWav(wavURL: URL) -> (text: String, words: [TimedWord]) {
+    private func runCLIOnWav(wavURL: URL, initialPrompt: String? = nil) -> (text: String, words: [TimedWord]) {
         let store = ModelStore.shared
         guard let model = store.model(named: store.activeModelID) else { return ("", []) }
 
@@ -1107,7 +1211,12 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
                 AppLogger.shared.error("Recognition", "whisper-cli или модель \(model.id) не найдены", details: model.id)
                 return ("", [])
             }
-            let output = runCLIProcess(cliPath, arguments: ["-m", modelPath, "-f", wavURL.path, "-l", model.languageCode, "-nt", "-ojf"])
+            var arguments = ["-m", modelPath, "-f", wavURL.path, "-l", model.languageCode, "-nt", "-ojf"]
+            if let initialPrompt, !initialPrompt.isEmpty {
+                let prompt = String(initialPrompt.suffix(160))
+                arguments += ["--initial-prompt", prompt]
+            }
+            let output = runCLIProcess(cliPath, arguments: arguments)
             let parts = output.components(separatedBy: .newlines)
                 .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                 .filter { !$0.isEmpty && !$0.hasPrefix("[") && !$0.lowercased().hasPrefix("whisper") }
