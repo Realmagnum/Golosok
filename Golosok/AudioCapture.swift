@@ -945,9 +945,9 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
                         self.fileProcessingProgress = min(1, Double(chunkEndFrame) / Double(totalFrames))
                         OverlayPanelManager.shared.keepFront()
                     }
+                    coveredThroughFrame = chunkEndFrame
+                    chunkIndex += 1
                 }
-                coveredThroughFrame = chunkEndFrame
-                chunkIndex += 1
             }
 
             let rawText = accumulatedText.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1179,6 +1179,169 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         }
         return current
     }
+
+    struct TimeIntervalMapping {
+        let compressedStart: Double
+        let compressedEnd: Double
+        let originalStart: Double
+        let originalEnd: Double
+    }
+
+    struct ClampedAudioResult {
+        let url: URL
+        let mappings: [TimeIntervalMapping]
+
+        func mapCompressedToOriginal(_ t: Double) -> Double {
+            for m in mappings {
+                if t >= m.compressedStart && t <= m.compressedEnd {
+                    let dt = t - m.compressedStart
+                    return m.originalStart + dt
+                }
+            }
+            guard let last = mappings.last else { return t }
+            if t > last.compressedEnd {
+                return last.originalEnd + (t - last.compressedEnd)
+            }
+            return t
+        }
+    }
+
+    /// Clamps long pauses in audio before feeding to GigaAM RNN-T.
+    /// RNN-T decoders suffer from silence drift / blank-loop collapse when pauses exceed ~1.5s,
+    /// which causes subsequent words to be dropped. This compacts pauses longer than 0.5s down to 0.35s,
+    /// while preserving exact timestamp mappings for word alignment.
+    static func clampSilences(wavURL: URL, maxSilenceDuration: Double = 0.5, clampedSilenceDuration: Double = 0.35) -> ClampedAudioResult? {
+        guard let file = try? AVAudioFile(forReading: wavURL) else { return nil }
+        let format = file.processingFormat
+        let totalFrames = AVAudioFrameCount(file.length)
+        guard totalFrames > 0,
+              let pcmBuffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: totalFrames) else { return nil }
+
+        do {
+            try file.read(into: pcmBuffer, frameCount: totalFrames)
+        } catch {
+            return nil
+        }
+
+        guard let floatData = pcmBuffer.floatChannelData?[0] else { return nil }
+        let sampleRate = format.sampleRate
+        let frameSize = Int(0.02 * sampleRate) // 20ms
+        let totalSamples = Int(pcmBuffer.frameLength)
+        guard totalSamples > frameSize else { return nil }
+
+        var energies: [Float] = []
+        energies.reserveCapacity(totalSamples / frameSize + 1)
+
+        var sIdx = 0
+        while sIdx < totalSamples {
+            let count = min(frameSize, totalSamples - sIdx)
+            var sumSq: Float = 0
+            for i in 0..<count {
+                let val = floatData[sIdx + i]
+                sumSq += val * val
+            }
+            let rms = sqrt(sumSq / Float(count))
+            energies.append(rms)
+            sIdx += count
+        }
+
+        guard !energies.isEmpty else { return nil }
+        let sortedEnergies = energies.sorted()
+        let noiseFloor = sortedEnergies[sortedEnergies.count / 10]
+        let peakEnergy = sortedEnergies[Int(Double(sortedEnergies.count) * 0.95)]
+        let silenceThreshold = max(noiseFloor * 1.5, min(peakEnergy * 0.08, 0.025))
+
+        let maxSilenceFrames = max(1, Int(clampedSilenceDuration / 0.02))
+        let triggerFrames = max(1, Int(maxSilenceDuration / 0.02))
+
+        var compressedSamples: [Float] = []
+        compressedSamples.reserveCapacity(totalSamples)
+        var mappings: [TimeIntervalMapping] = []
+        var didCompress = false
+
+        var i = 0
+        while i < energies.count {
+            if energies[i] < silenceThreshold {
+                var j = i
+                while j < energies.count && energies[j] < silenceThreshold {
+                    j += 1
+                }
+                let runFrames = j - i
+                let origStartSample = i * frameSize
+                let origEndSample = min(totalSamples, j * frameSize)
+
+                if runFrames > triggerFrames {
+                    didCompress = true
+                    let keepCount = maxSilenceFrames
+                    let samplesToKeep = min(origEndSample - origStartSample, keepCount * frameSize)
+                    let compStart = compressedSamples.count
+                    for s in 0..<samplesToKeep {
+                        compressedSamples.append(floatData[origStartSample + s])
+                    }
+                    let compEnd = compressedSamples.count
+                    mappings.append(TimeIntervalMapping(
+                        compressedStart: Double(compStart) / sampleRate,
+                        compressedEnd: Double(compEnd) / sampleRate,
+                        originalStart: Double(origStartSample) / sampleRate,
+                        originalEnd: Double(origStartSample + samplesToKeep) / sampleRate
+                    ))
+                } else {
+                    let count = origEndSample - origStartSample
+                    let compStart = compressedSamples.count
+                    for s in 0..<count {
+                        compressedSamples.append(floatData[origStartSample + s])
+                    }
+                    let compEnd = compressedSamples.count
+                    mappings.append(TimeIntervalMapping(
+                        compressedStart: Double(compStart) / sampleRate,
+                        compressedEnd: Double(compEnd) / sampleRate,
+                        originalStart: Double(origStartSample) / sampleRate,
+                        originalEnd: Double(origEndSample) / sampleRate
+                    ))
+                }
+                i = j
+            } else {
+                let origStartSample = i * frameSize
+                let origEndSample = min(totalSamples, (i + 1) * frameSize)
+                let count = origEndSample - origStartSample
+                let compStart = compressedSamples.count
+                for s in 0..<count {
+                    compressedSamples.append(floatData[origStartSample + s])
+                }
+                let compEnd = compressedSamples.count
+                mappings.append(TimeIntervalMapping(
+                    compressedStart: Double(compStart) / sampleRate,
+                    compressedEnd: Double(compEnd) / sampleRate,
+                    originalStart: Double(origStartSample) / sampleRate,
+                    originalEnd: Double(origEndSample) / sampleRate
+                ))
+                i += 1
+            }
+        }
+
+        guard didCompress else { return nil }
+
+        let outURL = FileManager.default.temporaryDirectory.appendingPathComponent("clamped_\(UUID().uuidString).wav")
+        try? FileManager.default.removeItem(at: outURL)
+
+        do {
+            let targetFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: sampleRate, channels: 1, interleaved: false)!
+            let outFile = try AVAudioFile(forWriting: outURL, settings: targetFormat.settings)
+            guard let outBuffer = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: AVAudioFrameCount(compressedSamples.count)) else {
+                return nil
+            }
+            outBuffer.frameLength = AVAudioFrameCount(compressedSamples.count)
+            if let outData = outBuffer.floatChannelData?[0] {
+                for idx in 0..<compressedSamples.count {
+                    outData[idx] = compressedSamples[idx]
+                }
+            }
+            try outFile.write(from: outBuffer)
+        } catch {
+            return nil
+        }
+        return ClampedAudioResult(url: outURL, mappings: mappings)
+    }
     
     private func runCLIOnWav(wavURL: URL, initialPrompt: String? = nil) -> (text: String, words: [TimedWord]) {
         let store = ModelStore.shared
@@ -1196,8 +1359,20 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
                 AppLogger.shared.error("Recognition", "transcribe-cli или встроенная модель не найдены в бандле")
                 return ("", [])
             }
-            let output = runCLIProcess(cliPath, arguments: ["-m", modelPath, "--timestamps", "word", wavURL.path])
-            let words = Self.finalizeWords(parseGigaAMTokens(output))
+            let clamped = Self.clampSilences(wavURL: wavURL)
+            let effectiveWavURL = clamped?.url ?? wavURL
+            let output = runCLIProcess(cliPath, arguments: ["-m", modelPath, "--timestamps", "word", effectiveWavURL.path])
+            var words = Self.finalizeWords(parseGigaAMTokens(output))
+            if let clamped {
+                words = words.map { w in
+                    TimedWord(
+                        text: w.text,
+                        start: clamped.mapCompressedToOriginal(w.start),
+                        end: clamped.mapCompressedToOriginal(w.end)
+                    )
+                }
+                try? FileManager.default.removeItem(at: clamped.url)
+            }
             let lines = output.components(separatedBy: .newlines)
             if let textLine = lines.first(where: { $0.trimmingCharacters(in: .whitespaces).hasPrefix("text:") }) {
                 let extracted = String(textLine.trimmingCharacters(in: .whitespaces).dropFirst(5)).trimmingCharacters(in: .whitespacesAndNewlines)

@@ -36,6 +36,41 @@ struct GolosokTests {
         #expect(result == "— Привет.\n\n— Здравствуй!")
     }
 
+    @Test func russianNumbersNormalizeSimpleAndCompoundPhrases() {
+        #expect(TextFormatter.normalizeRussianNumbers("у меня двадцать пять файлов") == "у меня 25 файлов")
+        #expect(TextFormatter.normalizeRussianNumbers("двадцать пять тысяч сто двадцать три") == "25123")
+        #expect(TextFormatter.normalizeRussianNumbers("пять миллионов триста тысяч") == "5300000")
+    }
+
+    @Test func russianNumberNormalizationKeepsPunctuationAndOrdinals() {
+        #expect(TextFormatter.normalizeRussianNumbers("пятый этаж, двадцать пять процентов.") == "пятый этаж, 25 процентов.")
+        #expect(TextFormatter.normalizeRussianNumbers("ноль и одна задача") == "ноль и 1 задача")
+    }
+
+    @Test func russianNumberNormalizationKeepsZeroAndDigitTokens() {
+        #expect(TextFormatter.normalizeRussianNumbers("ноль и одна задача") == "ноль и 1 задача")
+        #expect(TextFormatter.normalizeRussianNumbers("код 123, версия два.") == "код 123, версия 2.")
+        #expect(TextFormatter.normalizeRussianNumbers("пять, шесть.") == "5, 6.")
+    }
+
+    @Test func boundaryDuplicateIsRemovedButDifferentWordsRemain() {
+        #expect(AudioCapture.removeBoundaryDuplicate(previous: "... мы проверили этот код", current: "этот код и нашли ошибку") == "и нашли ошибку")
+        #expect(AudioCapture.removeBoundaryDuplicate(previous: "... открыли настройки", current: "снова открыли настройки") == "снова открыли настройки")
+        #expect(AudioCapture.removeBoundaryDuplicate(previous: "да", current: "да, конечно") == "да, конечно")
+    }
+
+    @Test func timeIntervalMappingPreservesTimestamps() {
+        let mapping = AudioCapture.TimeIntervalMapping(
+            compressedStart: 0.0,
+            compressedEnd: 1.0,
+            originalStart: 0.0,
+            originalEnd: 3.5
+        )
+        let result = AudioCapture.ClampedAudioResult(url: URL(fileURLWithPath: "/tmp/fake.wav"), mappings: [mapping])
+        #expect(result.mapCompressedToOriginal(0.5) == 0.5)
+        #expect(result.mapCompressedToOriginal(1.5) == 4.0)
+    }
+
     // MARK: - DashboardCalculator
 
     @Test func emptyHistoryProducesZeroedStats() {

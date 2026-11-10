@@ -7,3 +7,5 @@ Golosok/whisper-cli
 *.pbxproj
 Golosok/ffmpeg
 Golosok.xcodeproj/project.pbxproj
+__pycache__/
+*.pyc
