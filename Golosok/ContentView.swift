@@ -620,13 +620,13 @@ struct StagePickerMenuButton: View {
 
     var body: some View {
         UIDropdownMenu(items: [
-            .action(textStageMode == .final ? "✓ Итоговый текст" : "  Итоговый текст") {
+            .action((textStageMode == .final ? "✓ " : "  ") + String(localized: "Итоговый текст")) {
                 withAnimation(.easeInOut(duration: 0.15)) { textStageMode = .final }
             },
-            .action(textStageMode == .terms ? "✓ После IT-словаря" : "  После IT-словаря") {
+            .action((textStageMode == .terms ? "✓ " : "  ") + String(localized: "После IT-словаря")) {
                 withAnimation(.easeInOut(duration: 0.15)) { textStageMode = .terms }
             },
-            .action(textStageMode == .raw ? "✓ Сырой ASR (до обработки)" : "  Сырой ASR (до обработки)") {
+            .action((textStageMode == .raw ? "✓ " : "  ") + String(localized: "Сырой ASR (до обработки)")) {
                 withAnimation(.easeInOut(duration: 0.15)) { textStageMode = .raw }
             }
         ]) {
@@ -1123,7 +1123,7 @@ struct ContentView: View {
                                 if !diff.itRanges.isEmpty {
                                     HStack(spacing: 4) {
                                         Circle().fill(Color(hex: "#10B981")).frame(width: 6, height: 6)
-                                        Text("IT-термин")
+                                        Text(LocalizedStringKey("IT-термин"))
                                             .font(.system(size: 10, weight: .semibold, design: .rounded))
                                             .foregroundColor(Color(hex: "#10B981"))
                                     }
@@ -1134,7 +1134,7 @@ struct ContentView: View {
                                 if !diff.aiRanges.isEmpty {
                                     HStack(spacing: 4) {
                                         Circle().fill(Color(hex: "#8B5CF6")).frame(width: 6, height: 6)
-                                        Text("ИИ-правка")
+                                        Text(LocalizedStringKey("ИИ-правка"))
                                             .font(.system(size: 10, weight: .semibold, design: .rounded))
                                             .foregroundColor(Color(hex: "#8B5CF6"))
                                     }
@@ -1186,22 +1186,24 @@ struct ContentView: View {
                                         .foregroundColor(isIdentical ? .uiMidGray : .orange)
                                     Text(isIdentical
                                          ? (textStageMode == .raw
-                                            ? "Просмотр: Сырой текст голосовой модели (совпадает с итоговым, замен не было)"
-                                            : "Просмотр: Текст после словаря (совпадает с итоговым, замен не было)")
+                                            ? String(localized: "Просмотр: Сырой текст голосовой модели (совпадает с итоговым, замен не было)")
+                                            : String(localized: "Просмотр: Текст после словаря (совпадает с итоговым, замен не было)"))
                                          : (textStageMode == .raw
-                                            ? "Просмотр: Сырой текст голосовой модели (до обработки словарём и ИИ)"
-                                            : "Просмотр: Текст после словаря IT-терминов (до обработки ИИ-шаблоном)"))
+                                            ? String(localized: "Просмотр: Сырой текст голосовой модели (до обработки словарём и ИИ)")
+                                            : String(localized: "Просмотр: Текст после словаря IT-терминов (до обработки ИИ-шаблоном)")))
                                         .font(UIStyleFont.body(size: 12, weight: .medium))
                                         .foregroundColor(isIdentical ? .uiMidGray : .uiInk)
                                     Spacer()
-                                    Button("Вернуться к итоговому") {
+                                    Button(action: {
                                         withAnimation(.easeInOut(duration: 0.15)) {
                                             textStageMode = .final
                                         }
+                                    }) {
+                                        Text(LocalizedStringKey("Вернуться к итоговому"))
+                                            .font(UIStyleFont.body(size: 11, weight: .semibold))
+                                            .foregroundColor(.blue)
                                     }
-                                    .font(UIStyleFont.body(size: 11, weight: .semibold))
                                     .buttonStyle(PlainButtonStyle())
-                                    .foregroundColor(.blue)
                                 }
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 8)

@@ -5862,6 +5862,1046 @@
           }
         }
       }
+    },
+    "Этапы": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stages"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Этапы"
+          }
+        }
+      }
+    },
+    "Распознать заново": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retranscribe"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Распознать заново"
+          }
+        }
+      }
+    },
+    "IT-термин": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "IT Term"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "IT-термин"
+          }
+        }
+      }
+    },
+    "ИИ-правка": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AI Edit"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ИИ-правка"
+          }
+        }
+      }
+    },
+    "Вернуться к итоговому": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Back to final"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вернуться к итоговому"
+          }
+        }
+      }
+    },
+    "Итоговый текст": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Final text"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Итоговый текст"
+          }
+        }
+      }
+    },
+    "После IT-словаря": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "After IT dictionary"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "После IT-словаря"
+          }
+        }
+      }
+    },
+    "Сырой ASR (до обработки)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Raw ASR (unprocessed)"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сырой ASR (до обработки)"
+          }
+        }
+      }
+    },
+    "Итоговый": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Final"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Итоговый"
+          }
+        }
+      }
+    },
+    "После словаря": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "After dictionary"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "После словаря"
+          }
+        }
+      }
+    },
+    "Сырой ASR": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Raw ASR"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сырой ASR"
+          }
+        }
+      }
+    },
+    "Повторное распознавание...": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retranscribing..."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Повторное распознавание..."
+          }
+        }
+      }
+    },
+    "Просмотр: Сырой текст голосовой модели (совпадает с итоговым, замен не было)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Viewing: Raw speech model text (identical to final, no changes)"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Просмотр: Сырой текст голосовой модели (совпадает с итоговым, замен не было)"
+          }
+        }
+      }
+    },
+    "Просмотр: Текст после словаря (совпадает с итоговым, замен не было)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Viewing: Post-dictionary text (identical to final, no changes)"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Просмотр: Текст после словаря (совпадает с итоговым, замен не было)"
+          }
+        }
+      }
+    },
+    "Просмотр: Сырой текст голосовой модели (до обработки словарём и ИИ)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Viewing: Raw speech model text (before dictionary and AI)"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Просмотр: Сырой текст голосовой модели (до обработки словарём и ИИ)"
+          }
+        }
+      }
+    },
+    "Просмотр: Текст после словаря IT-терминов (до обработки ИИ-шаблоном)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Viewing: Post-IT dictionary text (before AI template processing)"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Просмотр: Текст после словаря IT-терминов (до обработки ИИ-шаблоном)"
+          }
+        }
+      }
+    },
+    "+ Инференс": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "+ Inference"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "+ Инференс"
+          }
+        }
+      }
+    },
+    "API Ключ (опционально)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "API Key (optional)"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "API Ключ (опционально)"
+          }
+        }
+      }
+    },
+    "IT-термины и автозамена": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "IT Terms & Autocorrect"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "IT-термины и автозамена"
+          }
+        }
+      }
+    },
+    "АВТОМАТИЧЕСКАЯ ИИ-ОБРАБОТКА": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AUTOMATIC AI PROCESSING"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "АВТОМАТИЧЕСКАЯ ИИ-ОБРАБОТКА"
+          }
+        }
+      }
+    },
+    "Автоматическая обработка текста сразу после распознавания речи": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatic text processing immediately after speech recognition"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Автоматическая обработка текста сразу после распознавания речи"
+          }
+        }
+      }
+    },
+    "Автопополнение словаря из правок ИИ": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto-learn vocabulary from AI edits"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Автопополнение словаря из правок ИИ"
+          }
+        }
+      }
+    },
+    "Выбранный шаблон": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selected template"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Выбранный шаблон"
+          }
+        }
+      }
+    },
+    "Добавление исключений и терминов при исправлении текста моделью": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add exceptions and terms when the model corrects text"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Добавление исключений и терминов при исправлении текста моделью"
+          }
+        }
+      }
+    },
+    "Идентификатор модели (model param)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Model identifier (model param)"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Идентификатор модели (model param)"
+          }
+        }
+      }
+    },
+    "Компенсация искажений англоязычных терминов": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compensation for distorted English tech terms"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Компенсация искажений англоязычных терминов"
+          }
+        }
+      }
+    },
+    "Название профиля": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Profile name"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Название профиля"
+          }
+        }
+      }
+    },
+    "Новый инференс распознавания": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New recognition inference"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Новый инференс распознавания"
+          }
+        }
+      }
+    },
+    "Подключение внешнего ASR-сервера (OpenAI-совместимый API /audio/transcriptions, llama-swap, vLLM, Whisper server).": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect external ASR server (OpenAI-compatible /audio/transcriptions, llama-swap, vLLM, Whisper server)."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Подключение внешнего ASR-сервера (OpenAI-совместимый API /audio/transcriptions, llama-swap, vLLM, Whisper server)."
+          }
+        }
+      }
+    },
+    "Применять ИИ-шаблон к каждой записи": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apply AI template to every note"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Применять ИИ-шаблон к каждой записи"
+          }
+        }
+      }
+    },
+    "Словарь": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vocabulary"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Словарь"
+          }
+        }
+      }
+    },
+    "Управлять промптами": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Manage prompts"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Управлять промптами"
+          }
+        }
+      }
+    },
+    "Автоматически переключиться при сбое сети, таймауте или ошибках 401/5xx": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatically failover on network error, timeout, or 401/5xx"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Автоматически переключиться при сбое сети, таймауте или ошибках 401/5xx"
+          }
+        }
+      }
+    },
+    "Авторизация Neuraldeep": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neuraldeep Authorization"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Авторизация Neuraldeep"
+          }
+        }
+      }
+    },
+    "Войти через браузер": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign in via browser"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Войти через браузер"
+          }
+        }
+      }
+    },
+    "Выберите резервного провайдера:": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select failover provider:"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Выберите резервного провайдера:"
+          }
+        }
+      }
+    },
+    "Добавить": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Добавить"
+          }
+        }
+      }
+    },
+    "Добавление произвольного OpenAI-совместимого сервиса (Ollama, vLLM, llama-swap, LiteLLM, OpenRouter и др.).": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add any OpenAI-compatible service (Ollama, vLLM, llama-swap, LiteLLM, OpenRouter, etc.)."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Добавление произвольного OpenAI-совместимого сервиса (Ollama, vLLM, llama-swap, LiteLLM, OpenRouter и др.)."
+          }
+        }
+      }
+    },
+    "Название для отображения": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Display name"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Название для отображения"
+          }
+        }
+      }
+    },
+    "Название провайдера": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Provider name"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Название провайдера"
+          }
+        }
+      }
+    },
+    "Новый ИИ-провайдер": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New AI Provider"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Новый ИИ-провайдер"
+          }
+        }
+      }
+    },
+    "Основной": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Primary"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Основной"
+          }
+        }
+      }
+    },
+    "Переименовать": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rename"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Переименовать"
+          }
+        }
+      }
+    },
+    "Переименовать инференс": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rename inference"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Переименовать инференс"
+          }
+        }
+      }
+    },
+    "Провайдер": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Provider"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Провайдер"
+          }
+        }
+      }
+    },
+    "Резерв": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Failover"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Резерв"
+          }
+        }
+      }
+    },
+    "Резервный провайдер (Failover)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Failover Provider"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Резервный провайдер (Failover)"
+          }
+        }
+      }
+    },
+    "Автоматическая компенсация ошибок распознавания английских терминов": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatic compensation of English recognition errors"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Автоматическая компенсация ошибок распознавания английских терминов"
+          }
+        }
+      }
+    },
+    "Автообучение из ИИ": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto-learn from AI"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Автообучение из ИИ"
+          }
+        }
+      }
+    },
+    "Буфер кандидатов пуст": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Candidate buffer is empty"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Буфер кандидатов пуст"
+          }
+        }
+      }
+    },
+    "Варианты ошибок распознавания (через запятую)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recognition distortion variants (comma-separated)"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Варианты ошибок распознавания (через запятую)"
+          }
+        }
+      }
+    },
+    "Добавить термин": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add Term"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Добавить термин"
+          }
+        }
+      }
+    },
+    "Импорт": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Импорт"
+          }
+        }
+      }
+    },
+    "Кандидаты автообучения ИИ": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AI Auto-learn Candidates"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Кандидаты автообучения ИИ"
+          }
+        }
+      }
+    },
+    "Новые созвучные варианты, обнаруженные ИИ. Проверяются автоматически или вручную.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New phonetic variants discovered by AI. Checked automatically or manually."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Новые созвучные варианты, обнаруженные ИИ. Проверяются автоматически или вручную."
+          }
+        }
+      }
+    },
+    "Очистить всё": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear all"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Очистить всё"
+          }
+        }
+      }
+    },
+    "Правильное написание (каноническое)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Correct spelling (canonical)"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Правильное написание (каноническое)"
+          }
+        }
+      }
+    },
+    "Проверить через ИИ сейчас": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check with AI now"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Проверить через ИИ сейчас"
+          }
+        }
+      }
+    },
+    "Сбросить к дефолтным": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reset to defaults"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сбросить к дефолтным"
+          }
+        }
+      }
+    },
+    "Словарь IT-терминов и автозамена": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "IT Terms Dictionary & Autocorrect"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Словарь IT-терминов и автозамена"
+          }
+        }
+      }
+    },
+    "Валидатор IT": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "IT Validator"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Валидатор IT"
+          }
+        }
+      }
+    },
+    "Восстановить исходный": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reset to default"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Восстановить исходный"
+          }
+        }
+      }
+    },
+    "Откатить правки": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Revert edits"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Откатить правки"
+          }
+        }
+      }
+    },
+    "Системный": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "System"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Системный"
+          }
+        }
+      }
+    },
+    "Генерация ответа…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Generating response…"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Генерация ответа…"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
