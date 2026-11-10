@@ -1389,7 +1389,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
             var arguments = ["-m", modelPath, "-f", wavURL.path, "-l", model.languageCode, "-nt", "-ojf"]
             if let initialPrompt, !initialPrompt.isEmpty {
                 let prompt = String(initialPrompt.suffix(160))
-                arguments += ["--initial-prompt", prompt]
+                arguments += ["--prompt", prompt]
             }
             let output = runCLIProcess(cliPath, arguments: arguments)
             let parts = output.components(separatedBy: .newlines)
