@@ -212,7 +212,7 @@ struct TechTermManagerView: View {
                                     Circle()
                                         .fill(Color.uiWarn)
                                         .frame(width: 5, height: 5)
-                                    Text("\(store.candidates.count) на проверке")
+                                    Text(String(format: String(localized: "%lld на проверке"), Int64(store.candidates.count)))
                                         .font(UIStyleFont.body(size: 10, weight: .semibold))
                                         .foregroundColor(.uiWarn)
                                 }
@@ -231,7 +231,7 @@ struct TechTermManagerView: View {
 
             // Нижняя строка: счетчик и кнопки импорта/экспорта
             HStack(spacing: 8) {
-                Text("Показано: \(displayedRules.count) из \(store.rules.count)")
+                Text(String(format: String(localized: "Показано: %lld из %lld"), Int64(displayedRules.count), Int64(store.rules.count)))
                     .font(UIStyleFont.mono(size: 11))
                     .foregroundColor(.uiMidGray)
 
@@ -383,7 +383,7 @@ struct TechTermManagerView: View {
             Spacer()
 
             if !store.candidates.isEmpty {
-                UIOutlineButton(title: "Кандидаты ИИ (\(store.candidates.count))") {
+                UIOutlineButton(title: LocalizedStringKey(String(format: String(localized: "Кандидаты ИИ (%lld)"), Int64(store.candidates.count)))) {
                     showingCandidatesSheet = true
                 }
             }
@@ -572,7 +572,7 @@ struct TechTermCandidatesView: View {
                                         .font(UIStyleFont.mono(size: 12))
                                         .foregroundColor(Color(hex: "#10B981"))
                                 }
-                                Text("Встретилось раз: \(c.occurrences) • \(timeAgo(c.lastSeen))")
+                                Text(String(format: String(localized: "Встретилось раз: %lld • %@"), Int64(c.occurrences), timeAgo(c.lastSeen)))
                                     .font(UIStyleFont.body(size: 10))
                                     .foregroundColor(.uiMidGray)
                             }

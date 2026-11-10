@@ -257,7 +257,7 @@ struct DashboardView: View {
                             HStack(spacing: 5) {
                                 Image(systemName: "sparkles")
                                     .font(.system(size: 10, weight: .bold))
-                                Text("Термины: \(techTerms.candidates.count)")
+                                Text(String(format: String(localized: "Термины: %lld"), Int64(techTerms.candidates.count)))
                                     .font(UIStyleFont.body(size: 10, weight: .bold))
                             }
                             .foregroundColor(.white)

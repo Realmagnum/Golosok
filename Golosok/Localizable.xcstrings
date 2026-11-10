@@ -1,24 +1,38 @@
 {
   "sourceLanguage": "ru",
   "strings": {
-    "": {
+    " • 2026": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": ""
+            "value": " • 2026"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": ""
+            "value": " • 2026"
           }
         }
       }
     },
-    " • 2026": {},
-    "/ %lld": {},
+    "/ %lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "/ %lld"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "/ %lld"
+          }
+        }
+      }
+    },
     "%.0f мин": {
       "localizations": {
         "en": {
@@ -117,12 +131,33 @@
         }
       }
     },
-    "%lld МБ — Apple Metal": {},
+    "%lld МБ — Apple Metal": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld MB — Apple Metal"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld МБ — Apple Metal"
+          }
+        }
+      }
+    },
     "%lld/%lld": {
       "localizations": {
         "ru": {
           "stringUnit": {
-            "state": "new",
+            "state": "translated",
+            "value": "%1$lld/%2$lld"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
             "value": "%1$lld/%2$lld"
           }
         }
@@ -177,7 +212,22 @@
         }
       }
     },
-    "⌘F": {},
+    "⌘F": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⌘F"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⌘F"
+          }
+        }
+      }
+    },
     "⌥ + ПРОБЕЛ": {
       "extractionState": "stale",
       "localizations": {
@@ -348,7 +398,22 @@
         }
       }
     },
-    "0/0": {},
+    "0/0": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "0/0"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "0/0"
+          }
+        }
+      }
+    },
     "4 ФОРМАТА": {
       "extractionState": "stale",
       "localizations": {
@@ -494,7 +559,22 @@
         }
       }
     },
-    "CloseSearch": {},
+    "CloseSearch": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CloseSearch"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Закрыть поиск"
+          }
+        }
+      }
+    },
     "DeepSeek": {
       "extractionState": "stale",
       "localizations": {
@@ -512,7 +592,22 @@
         }
       }
     },
-    "deepseek-chat": {},
+    "deepseek-chat": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "deepseek-chat"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "deepseek-chat"
+          }
+        }
+      }
+    },
     "Design & Dev by Kozak • 2026": {
       "localizations": {
         "en": {
@@ -529,7 +624,22 @@
         }
       }
     },
-    "Design & Development by ": {},
+    "Design & Development by ": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Design & Development by "
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Дизайн и разработка: "
+          }
+        }
+      }
+    },
     "Design & Development by Kozak • 2026": {
       "extractionState": "stale",
       "localizations": {
@@ -681,8 +791,38 @@
         }
       }
     },
-    "gls_…": {},
-    "gpt-4o-mini, gpt-4o": {},
+    "gls_…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "gls_…"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "gls_…"
+          }
+        }
+      }
+    },
+    "gpt-4o-mini, gpt-4o": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "gpt-4o-mini, gpt-4o"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "gpt-4o-mini, gpt-4o"
+          }
+        }
+      }
+    },
     "Groq": {
       "extractionState": "stale",
       "localizations": {
@@ -781,9 +921,54 @@
         }
       }
     },
-    "Kozak": {},
-    "llama-3.3-70b-versatile": {},
-    "LM Studio / локальный сервер": {},
+    "Kozak": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kozak"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kozak"
+          }
+        }
+      }
+    },
+    "llama-3.3-70b-versatile": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "llama-3.3-70b-versatile"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "llama-3.3-70b-versatile"
+          }
+        }
+      }
+    },
+    "LM Studio / локальный сервер": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LM Studio / local server"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LM Studio / локальный сервер"
+          }
+        }
+      }
+    },
     "Markdown (.md)": {
       "extractionState": "stale",
       "localizations": {
@@ -1707,7 +1892,22 @@
         }
       }
     },
-    "Дата": {},
+    "Дата": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Date"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Дата"
+          }
+        }
+      }
+    },
     "Дашборд": {
       "extractionState": "stale",
       "localizations": {
@@ -1968,7 +2168,22 @@
         }
       }
     },
-    "Закрыть поиск (Esc)": {},
+    "Закрыть поиск (Esc)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close search (Esc)"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Закрыть поиск (Esc)"
+          }
+        }
+      }
+    },
     "Заменить": {
       "localizations": {
         "en": {
@@ -2697,9 +2912,54 @@
         }
       }
     },
-    "Найти в стенограмме…": {},
-    "Найти далее": {},
-    "Найти ранее": {},
+    "Найти в стенограмме…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Find in transcript…"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Найти в стенограмме…"
+          }
+        }
+      }
+    },
+    "Найти далее": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Find next"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Найти далее"
+          }
+        }
+      }
+    },
+    "Найти ранее": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Find previous"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Найти ранее"
+          }
+        }
+      }
+    },
     "Например: Краткий пересказ": {
       "localizations": {
         "en": {
@@ -3039,7 +3299,22 @@
         }
       }
     },
-    "Номер": {},
+    "Номер": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Number"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Номер"
+          }
+        }
+      }
+    },
     "НОЧЬ": {
       "localizations": {
         "en": {
@@ -3947,7 +4222,22 @@
         }
       }
     },
-    "Предыдущее совпадение (⇧⌘G)": {},
+    "Предыдущее совпадение (⇧⌘G)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Previous match (⇧⌘G)"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Предыдущее совпадение (⇧⌘G)"
+          }
+        }
+      }
+    },
     "Придумать заголовок": {
       "extractionState": "stale",
       "localizations": {
@@ -4680,7 +4970,22 @@
         }
       }
     },
-    "Следующее совпадение (⌘G)": {},
+    "Следующее совпадение (⌘G)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Next match (⌘G)"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Следующее совпадение (⌘G)"
+          }
+        }
+      }
+    },
     "Слушайте исходный звук прямо в заметке, чтобы проверить соответствие с текстом": {
       "extractionState": "stale",
       "localizations": {
@@ -5270,7 +5575,22 @@
         }
       }
     },
-    "Часы": {},
+    "Часы": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hours"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Часы"
+          }
+        }
+      }
+    },
     "ЧАЩЕ": {
       "localizations": {
         "en": {
@@ -6899,6 +7219,150 @@
           "stringUnit": {
             "state": "translated",
             "value": "Генерация ответа…"
+          }
+        }
+      }
+    },
+    "Термины: %lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Terms: %lld"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Термины: %lld"
+          }
+        }
+      }
+    },
+    "Все ваши правки этого системного промпта будут сброшены к оригинальной заводской инструкции.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All your edits to this system prompt will be reset to the original default instructions."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Все ваши правки этого системного промпта будут сброшены к оригинальной заводской инструкции."
+          }
+        }
+      }
+    },
+    "Вернуть текст заголовка и инструкции к состоянию на момент открытия окна.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Revert title and instructions to the state when the window was opened."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вернуть текст заголовка и инструкции к состоянию на момент открытия окна."
+          }
+        }
+      }
+    },
+    "Все пользовательские термины будут заменены предустановленным набором IT-терминов.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All custom terms will be replaced with the default set of IT terms."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Все пользовательские термины будут заменены предустановленным набором IT-терминов."
+          }
+        }
+      }
+    },
+    "Все распознанные искажения либо уже добавлены в словарь, либо отклонены.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All recognized distortions have either been added to vocabulary or rejected."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Все распознанные искажения либо уже добавлены в словарь, либо отклонены."
+          }
+        }
+      }
+    },
+    "%lld на проверке": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld pending review"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld на проверке"
+          }
+        }
+      }
+    },
+    "Показано: %lld из %lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shown: %1$lld of %2$lld"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Показано: %1$lld из %2$lld"
+          }
+        }
+      }
+    },
+    "Кандидаты ИИ (%lld)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AI Candidates (%lld)"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Кандидаты ИИ (%lld)"
+          }
+        }
+      }
+    },
+    "Встретилось раз: %lld • %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seen: %1$lld times • %2$@"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Встретилось раз: %1$lld • %2$@"
           }
         }
       }

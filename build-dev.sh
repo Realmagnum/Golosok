@@ -4,6 +4,9 @@ set -e
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_TARGET="/Users/rm/Documents/!Projects/Golosok-Build/Golosok-Dev.app"
 
+echo "==> Проверка архитектурных инвариантов и локализации..."
+python3 "$DIR/scripts/verify_project_invariants.py"
+
 echo "==> Компиляция Golosok-Dev..."
 swiftc -parse-as-library -target arm64-apple-macos14.0 -O \
     -sdk "$(xcrun --show-sdk-path)" \
