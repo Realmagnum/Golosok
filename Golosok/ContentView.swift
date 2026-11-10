@@ -812,6 +812,11 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ToggleTranscriptSearch"))) { _ in
             toggleSearchBar()
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NoteTimingsUpdated"))) { notification in
+            if let updatedId = notification.object as? UUID, updatedId == selectedItemId {
+                loadSelectedTimings()
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("FindNextInTranscript"))) { _ in
             goToMatch(offset: 1)
         }
@@ -1071,6 +1076,7 @@ struct ContentView: View {
                                                 audioCapture.retranscribeNote(id: selected.id) { success in
                                                     if success, let updated = audioCapture.history.first(where: { $0.id == selected.id }) {
                                                         editableText = updated.text
+                                                        loadSelectedTimings()
                                                     }
                                                 }
                                             }

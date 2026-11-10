@@ -844,6 +844,9 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
               let data = try? JSONEncoder().encode(TimingFilePayload(words: words, duration: duration)) else { return }
         try? data.write(to: url, options: .atomic)
         AppLogger.shared.info("Recognition", "Тайминги слов сохранены", details: "\(words.count) слов, длительность \(String(format: "%.1f с", duration))")
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: NSNotification.Name("NoteTimingsUpdated"), object: id)
+        }
     }
     
     func timings(for id: UUID) -> (words: [TimedWord], duration: Double)? {
@@ -866,6 +869,9 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
     }
 
     func retranscribeNote(id: UUID, completion: ((Bool) -> Void)? = nil) {
+        if playingItemId == id { stopSyncedPlayback() }
+        if preloadedPlayerId == id { audioPlayer = nil; preloadedPlayerId = nil }
+
         guard let audioURL = audioFileURL(for: id),
               FileManager.default.fileExists(atPath: audioURL.path) else {
             completion?(false)
@@ -1362,9 +1368,9 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
             let clamped = Self.clampSilences(wavURL: wavURL)
             let effectiveWavURL = clamped?.url ?? wavURL
             let output = runCLIProcess(cliPath, arguments: ["-m", modelPath, "--timestamps", "word", effectiveWavURL.path])
-            var words = Self.finalizeWords(parseGigaAMTokens(output))
+            var rawWords = parseGigaAMTokens(output)
             if let clamped {
-                words = words.map { w in
+                rawWords = rawWords.map { w in
                     TimedWord(
                         text: w.text,
                         start: clamped.mapCompressedToOriginal(w.start),
@@ -1373,6 +1379,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
                 }
                 try? FileManager.default.removeItem(at: clamped.url)
             }
+            let words = Self.finalizeWords(rawWords)
             let lines = output.components(separatedBy: .newlines)
             if let textLine = lines.first(where: { $0.trimmingCharacters(in: .whitespaces).hasPrefix("text:") }) {
                 let extracted = String(textLine.trimmingCharacters(in: .whitespaces).dropFirst(5)).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1494,9 +1501,12 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         for i in 0..<(result.count - 1) {
             let nextStart = result[i + 1].start
             var end = result[i].end
-            if end <= result[i].start || end >= nextStart { end = nextStart }
-            if end <= result[i].start { end = result[i].start + 0.3 }
-            result[i] = TimedWord(text: result[i].text, start: result[i].start, end: end)
+            if end <= result[i].start || end < min(nextStart, result[i].start + 0.3) {
+                end = min(nextStart, max(end, result[i].start + 0.3))
+            }
+            if end > nextStart { end = nextStart }
+            if end <= result[i].start { end = nextStart }
+            result[i] = TimedWord(text: result[i].text, start: result[i].start, end: max(end, result[i].start + 0.05))
         }
         let last = result.count - 1
         if result[last].end <= result[last].start {
